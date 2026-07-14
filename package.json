@@ -1,0 +1,66 @@
+{
+  "name": "flare-redact",
+  "version": "0.2.0",
+  "description": "Hide secrets & PII in logs and text before they leak. Zero dependencies, ReDoS-safe patterns, tells you what it found and why.",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./stream": {
+      "types": "./dist/stream.d.ts",
+      "default": "./dist/stream.js"
+    }
+  },
+  "bin": {
+    "flare-redact": "bin/flare-redact.mjs"
+  },
+  "files": [
+    "dist",
+    "bin",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "npm run build && node --test",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "redact",
+    "redaction",
+    "secrets",
+    "pii",
+    "log",
+    "logging",
+    "security",
+    "mask",
+    "sanitize",
+    "gdpr",
+    "pci",
+    "api-key",
+    "jwt",
+    "zero-dependency"
+  ],
+  "author": "Umud Hasanli",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/umudhasanli/flare-redact.git"
+  },
+  "homepage": "https://github.com/umudhasanli/flare-redact#readme",
+  "bugs": {
+    "url": "https://github.com/umudhasanli/flare-redact/issues"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.6.0"
+  }
+}
