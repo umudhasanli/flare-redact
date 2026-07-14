@@ -1,0 +1,33 @@
+name: Bug report
+description: Something isn't being redacted the way it should be
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What did you run, and what came out?
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected instead
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproduction
+      description: The smallest input and code that shows it. Replace any real secrets with fake ones first.
+      render: js
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: flare-redact version and your Node version.
+      placeholder: flare-redact 0.2.0, Node 20.11
+    validations:
+      required: true

@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security report
+    url: https://github.com/umudhasanli/flare-redact/security/advisories/new
+    about: Found a way to slip a secret past the redactor, or a ReDoS in a pattern? Report it privately here, not as a public issue.
+  - name: Question or idea
+    url: https://github.com/umudhasanli/flare-redact/discussions
+    about: Not sure it's a bug yet? Start a discussion.

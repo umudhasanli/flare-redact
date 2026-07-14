@@ -1,0 +1,25 @@
+name: Proposal
+description: Suggest a detector, an API change, or an improvement
+labels: [proposal]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to do that's awkward or impossible today?
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What you have in mind
+      description: A rough shape is fine. If it's a new detector, an example of what it should catch (and what it shouldn't) helps a lot.
+    validations:
+      required: true
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Before you file
+      options:
+        - label: This keeps the library zero-dependency
+        - label: I've searched existing issues and it isn't already here
