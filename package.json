@@ -84,7 +84,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/umudhasanli/flare-redact.git"
+    "url": "git+https://github.com/umudhasanli/flare-redact.git"
   },
   "homepage": "https://github.com/umudhasanli/flare-redact#readme",
   "bugs": {
