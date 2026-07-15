@@ -1,0 +1,136 @@
+const onlyDigits = (s: string): string => s.replace(/\D/g, '');
+
+/** Generic Luhn (any length ≥ 2). Used by several national numbers and cards. */
+export function luhnCheck(value: string): boolean {
+  const d = onlyDigits(value);
+  if (d.length < 2) return false;
+  let sum = 0;
+  let alt = false;
+  for (let i = d.length - 1; i >= 0; i--) {
+    let n = d.charCodeAt(i) - 48;
+    if (alt) {
+      n *= 2;
+      if (n > 9) n -= 9;
+    }
+    sum += n;
+    alt = !alt;
+  }
+  return sum % 10 === 0;
+}
+
+/** ISO 13616 IBAN check: rearrange, letters→numbers, mod 97 === 1. */
+export function ibanValid(value: string): boolean {
+  const iban = value.replace(/[\s-]/g, '').toUpperCase();
+  if (!/^[A-Z]{2}\d{2}[A-Z0-9]{10,30}$/.test(iban)) return false;
+  const rearranged = iban.slice(4) + iban.slice(0, 4);
+  let remainder = 0;
+  for (const ch of rearranged) {
+    const code = ch >= 'A' && ch <= 'Z' ? (ch.charCodeAt(0) - 55).toString() : ch;
+    for (let i = 0; i < code.length; i++) {
+      remainder = (remainder * 10 + (code.charCodeAt(i) - 48)) % 97;
+    }
+  }
+  return remainder === 1;
+}
+
+/** Turkey T.C. Kimlik No — 11 digits, two check digits. */
+export function tcknValid(value: string): boolean {
+  const d = onlyDigits(value);
+  if (d.length !== 11 || d[0] === '0') return false;
+  const n = d.split('').map(Number);
+  const odd = n[0]! + n[2]! + n[4]! + n[6]! + n[8]!;
+  const even = n[1]! + n[3]! + n[5]! + n[7]!;
+  if (((odd * 7 - even) % 10 + 10) % 10 !== n[9]) return false;
+  const sum10 = n.slice(0, 10).reduce((a, b) => a + b, 0);
+  return sum10 % 10 === n[10];
+}
+
+/** Brazil CPF — 11 digits, two mod-11 check digits. */
+export function cpfValid(value: string): boolean {
+  const c = onlyDigits(value);
+  if (c.length !== 11 || /^(\d)\1{10}$/.test(c)) return false;
+  const digit = (len: number): number => {
+    let sum = 0;
+    for (let i = 0; i < len; i++) sum += Number(c[i]) * (len + 1 - i);
+    const r = (sum * 10) % 11;
+    return r === 10 ? 0 : r;
+  };
+  return digit(9) === Number(c[9]) && digit(10) === Number(c[10]);
+}
+
+const DNI_LETTERS = 'TRWAGMYFPDXBNJZSQVHLCKE';
+/** Spain DNI / NIE — number mod 23 maps to a control letter. */
+export function dniValid(value: string): boolean {
+  const m = value.toUpperCase().replace(/[\s-]/g, '').match(/^([XYZ]?)(\d{7,8})([A-Z])$/);
+  if (!m) return false;
+  const prefix = m[1] ? String('XYZ'.indexOf(m[1])) : '';
+  const n = parseInt(prefix + m[2], 10);
+  return DNI_LETTERS[n % 23] === m[3];
+}
+
+/** Netherlands BSN — 9 digits, 11-test (last weight is −1). */
+export function bsnValid(value: string): boolean {
+  const d = onlyDigits(value);
+  if (d.length !== 9 || d === '000000000') return false;
+  let sum = 0;
+  for (let i = 0; i < 8; i++) sum += Number(d[i]) * (9 - i);
+  sum += Number(d[8]) * -1;
+  return sum % 11 === 0;
+}
+
+/** Poland PESEL — 11 digits, weighted mod-10 check. */
+export function peselValid(value: string): boolean {
+  const d = onlyDigits(value);
+  if (d.length !== 11) return false;
+  const w = [1, 3, 7, 9, 1, 3, 7, 9, 1, 3];
+  let sum = 0;
+  for (let i = 0; i < 10; i++) sum += Number(d[i]) * w[i]!;
+  return (10 - (sum % 10)) % 10 === Number(d[10]);
+}
+
+/** Germany Steuer-IdNr — 11 digits, ISO 7064 MOD 11,10 check digit. */
+export function deTaxIdValid(value: string): boolean {
+  const d = onlyDigits(value);
+  if (d.length !== 11) return false;
+  let product = 10;
+  for (let i = 0; i < 10; i++) {
+    let sum = (Number(d[i]) + product) % 10;
+    if (sum === 0) sum = 10;
+    product = (sum * 2) % 11;
+  }
+  const check = (11 - product) % 10;
+  return check === Number(d[10]);
+}
+
+/** US SSN — no checksum exists, but whole ranges are never issued. */
+export function ssnValid(value: string): boolean {
+  const m = value.match(/^(\d{3})-?(\d{2})-?(\d{4})$/);
+  if (!m) return false;
+  const area = Number(m[1]);
+  const group = Number(m[2]);
+  const serial = Number(m[3]);
+  if (area === 0 || area === 666 || area >= 900) return false;
+  return group !== 0 && serial !== 0;
+}
+
+const CF_ODD: Record<string, number> = {
+  '0': 1, '1': 0, '2': 5, '3': 7, '4': 9, '5': 13, '6': 15, '7': 17, '8': 19, '9': 21,
+  A: 1, B: 0, C: 5, D: 7, E: 9, F: 13, G: 15, H: 17, I: 19, J: 21, K: 2, L: 4, M: 18,
+  N: 20, O: 11, P: 3, Q: 6, R: 8, S: 12, T: 14, U: 16, V: 10, W: 22, X: 25, Y: 24, Z: 23,
+};
+/** Italy Codice Fiscale — 16 chars, odd/even table checksum. */
+export function codiceFiscaleValid(value: string): boolean {
+  const cf = value.toUpperCase();
+  if (!/^[A-Z]{6}\d{2}[A-Z]\d{2}[A-Z]\d{3}[A-Z]$/.test(cf)) return false;
+  let sum = 0;
+  for (let i = 0; i < 15; i++) {
+    const ch = cf[i]!;
+    if (i % 2 === 0) {
+      sum += CF_ODD[ch]!;
+    } else {
+      const even = ch >= '0' && ch <= '9' ? ch.charCodeAt(0) - 48 : ch.charCodeAt(0) - 65;
+      sum += even;
+    }
+  }
+  return String.fromCharCode(65 + (sum % 26)) === cf[15];
+}

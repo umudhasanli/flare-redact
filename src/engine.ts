@@ -1,4 +1,5 @@
 import { DETECTORS, fnv1a, fpe, SENSITIVE_KEY_RE, type Detector } from './detectors.js';
+import { MULTILANG_KEY_SET } from './i18n.js';
 
 export type Mode = 'mask' | 'label' | 'hash' | 'fpe';
 
@@ -30,17 +31,21 @@ export interface Hit extends Finding {
 
 export type Replace = (value: string, det: Detector) => string;
 
+function matches(entry: string, d: Detector): boolean {
+  return d.id === entry || (d.tags?.includes(entry) ?? false);
+}
+
 export function resolveDetectors(opts: RedactOptions): Detector[] {
   const all = opts.custom?.length ? [...DETECTORS, ...opts.custom] : DETECTORS;
   if (opts.only?.length) {
-    const byId = new Map(all.map((d) => [d.id, d]));
-    return opts.only.map((id) => byId.get(id)).filter((d): d is Detector => !!d);
+    return all.filter((d) => opts.only!.some((e) => matches(e, d)));
   }
-  const disabled = opts.disable?.length ? new Set(opts.disable) : null;
-  const enabled = opts.enable?.length ? new Set(opts.enable) : null;
-  return all.filter(
-    (d) => (d.default || enabled?.has(d.id)) && !disabled?.has(d.id),
-  );
+  const { enable, disable } = opts;
+  return all.filter((d) => {
+    const on = d.default || (enable?.some((e) => matches(e, d)) ?? false);
+    const off = disable?.some((e) => matches(e, d)) ?? false;
+    return on && !off;
+  });
 }
 
 export function keyMatcher(opts: RedactOptions): (key: string) => boolean {
@@ -51,7 +56,7 @@ export function keyMatcher(opts: RedactOptions): (key: string) => boolean {
     const set = new Set(rk.map((s) => s.toLowerCase()));
     return (k) => set.has(k.toLowerCase());
   }
-  return (k) => SENSITIVE_KEY_RE.test(k);
+  return (k) => SENSITIVE_KEY_RE.test(k) || MULTILANG_KEY_SET.has(k.toLowerCase());
 }
 
 export function allowMatcher(opts: RedactOptions): (value: string) => boolean {

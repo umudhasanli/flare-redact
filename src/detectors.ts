@@ -1,3 +1,8 @@
+import { assignmentPattern } from './i18n.js';
+import { LOCALE_DETECTORS } from './locales.js';
+
+export { SECRET_KEYWORDS, MULTILANG_KEY_SET } from './i18n.js';
+
 export interface Detector {
   id: string;
   label: string;
@@ -6,6 +11,8 @@ export interface Detector {
   validate?: (match: string) => boolean;
   mask?: (match: string) => string;
   default: boolean;
+  /** Group labels — e.g. `["pii","id","tr"]` — so `enable`/`disable` can target a set. */
+  tags?: string[];
 }
 
 export function keepPrefix(n: number) {
@@ -225,11 +232,11 @@ export const DETECTORS: Detector[] = [
   {
     id: 'generic_assignment',
     label: 'Assigned secret',
-    why: 'A value assigned to a sensitive-looking field name (password=…, api_key: …).',
-    pattern:
-      /\b(?:pass(?:word|wd)?|secret|token|api[_-]?key|access[_-]?key|client[_-]?secret|auth)\b["'\s]*[:=]\s*["']?([^\s"',;]{4,})["']?/gi,
-    mask: (m) => m.replace(/([:=]\s*["']?)([^\s"',;]{4,})(["']?)\s*$/, '$1***$3'),
+    why: 'A value assigned to a sensitive-looking field name (password=…, 密码: …) in any language.',
+    pattern: assignmentPattern(),
+    mask: (m) => m.replace(/([:=]\s*["']?)([^\s"',;]{4,})(["']?)\s*$/u, '$1***$3'),
     default: true,
+    tags: ['secret'],
   },
   {
     id: 'email',
@@ -238,6 +245,7 @@ export const DETECTORS: Detector[] = [
     pattern: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,24}\b/g,
     mask: (m) => (m[0] ?? '') + '***@***',
     default: true,
+    tags: ['pii'],
   },
   {
     id: 'credit_card',
@@ -247,6 +255,7 @@ export const DETECTORS: Detector[] = [
     validate: luhn,
     mask: keepLast(4),
     default: true,
+    tags: ['pii', 'finance'],
   },
   {
     id: 'phone',
@@ -255,14 +264,7 @@ export const DETECTORS: Detector[] = [
     pattern: /\+[1-9]\d{7,14}\b/g,
     mask: (m) => m.slice(0, 3) + '***',
     default: false,
-  },
-  {
-    id: 'ssn',
-    label: 'US Social Security number',
-    why: 'A national identifier — high-value PII.',
-    pattern: /\b\d{3}-\d{2}-\d{4}\b/g,
-    mask: () => '***-**-****',
-    default: false,
+    tags: ['pii'],
   },
   {
     id: 'ipv4',
@@ -296,5 +298,7 @@ export const DETECTORS: Detector[] = [
     validate: (v) => entropy(v) >= 3.5,
     mask: keepPrefix(4),
     default: false,
+    tags: ['secret'],
   },
+  ...LOCALE_DETECTORS,
 ];

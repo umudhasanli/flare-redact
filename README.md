@@ -50,7 +50,7 @@ Nothing to configure. No list of field paths to maintain. No native build step.
 |   |   |   |
 |---|---|---|
 | 🔍 **Content-aware** — reads values, not just field names | ♻️ **Reversible** — vault: redact → use → restore | 🎭 **Format-preserving** — emails stay email-shaped |
-| 🤖 **LLM-safe** — strips secrets before OpenAI/Anthropic | 🗃️ **Consistent** — same value → same mask, joins survive | 🛡️ **ReDoS-safe · 0 deps** — safe on untrusted input |
+| 🤖 **LLM-safe** — strips secrets before OpenAI/Anthropic | 🌍 **20+ languages** — plus checksum-validated national IDs | 🛡️ **ReDoS-safe · 0 deps** — safe on untrusted input |
 
 ## Contents
 
@@ -68,6 +68,7 @@ Nothing to configure. No list of field paths to maintain. No native build step.
 - [Fail a build when a secret sneaks in](#fail-a-build-when-a-secret-sneaks-in)
 - [CLI](#cli)
 - [What it catches](#what-it-catches)
+- [Every language, every country](#every-language-every-country)
 - [Custom detectors & allowlists](#custom-detectors--allowlists)
 - [API](#api)
 - [Why not a field allowlist?](#why-not-a-field-allowlist)
@@ -374,12 +375,42 @@ Opt in with `enable`:
 |---|---|
 | `high_entropy` | long random-looking tokens of *any* format (entropy-based) |
 | `phone` | E.164 phone numbers |
-| `ssn` | US Social Security numbers |
 | `ipv4` / `ipv6` | IP addresses |
 | `mac_address` | MAC addresses |
 
 Plus object values whose **key name** is sensitive (`password`, `token`,
 `authorization`, `cookie`, `cvv`, …) are masked regardless of content.
+
+## Every language, every country
+
+Secrets like API keys and card numbers don't care what language your app is in.
+Neither does this — but the word-based checks do, so `password`, `secret`, and
+`token` are recognized in **20+ languages** (`şifrə=…`, `密码: …`, `пароль=…`,
+`contraseña: …`), as assignments and as object keys.
+
+National IDs are opt-in and **checksum-validated**, so a random run of digits is
+never mistaken for one. Enable a whole group or a single country by tag:
+
+```js
+redact(text, { enable: ['pii'] });        // every national ID below
+redact(text, { enable: ['tr', 'de'] });   // just Turkish and German
+```
+
+| Detector | Country | Validated by |
+|---|---|---|
+| `iban` | international *(on by default)* | ISO 13616 mod-97 |
+| `tr_tckn` | Turkey | TCKN checksum |
+| `de_tax_id` | Germany | ISO 7064 mod-11,10 |
+| `es_dni` | Spain (DNI/NIE) | control letter mod-23 |
+| `it_codice_fiscale` | Italy | odd/even table |
+| `br_cpf` | Brazil | two mod-11 digits |
+| `nl_bsn` | Netherlands | 11-test |
+| `pl_pesel` | Poland | weighted mod-10 |
+| `ca_sin` | Canada | Luhn |
+| `us_ssn` | United States | issued-range rules |
+
+Every algorithm has its own tests against known-valid and known-invalid numbers,
+so enabling them won't turn your logs into a wall of `[REDACTED]`.
 
 ## Custom detectors & allowlists
 
