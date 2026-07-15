@@ -1,7 +1,9 @@
-import { createVault, type Vault, type VaultOptions } from './index.js';
+import { createVault, buildRestore, type Vault, type VaultOptions } from './vault.js';
 
-export type { Vault, VaultOptions } from './index.js';
-export { createVault } from './index.js';
+export type { Vault, VaultOptions } from './vault.js';
+export { createVault } from './vault.js';
+
+const WRAPPED = Symbol.for('flare-redact.wrapped');
 
 function redactContent(content: unknown, vault: Vault): unknown {
   if (typeof content === 'string') return vault.redact(content);
@@ -16,25 +18,20 @@ function redactContent(content: unknown, vault: Vault): unknown {
 }
 
 function makeStreamRestorer(vault: Vault) {
-  const map = vault.entries();
+  const restore = buildRestore(vault.entries());
   let buf = '';
-  const restoreComplete = (s: string): string => {
-    let out = s;
-    for (const [ph, orig] of map) out = out.split(ph).join(orig);
-    return out;
-  };
   return {
     push(chunk: string): string {
       buf += chunk;
-      // Hold back a trailing "[..." that might still be an unfinished placeholder.
+      // Hold back a trailing "[…" that could still be an unfinished placeholder.
       const open = buf.lastIndexOf('[');
       const emitEnd = open !== -1 && buf.indexOf(']', open) === -1 ? open : buf.length;
       const emit = buf.slice(0, emitEnd);
       buf = buf.slice(emitEnd);
-      return restoreComplete(emit);
+      return restore(emit);
     },
     flush(): string {
-      const out = restoreComplete(buf);
+      const out = restore(buf);
       buf = '';
       return out;
     },
@@ -50,74 +47,72 @@ export function redactPrompt(text: string, opts: VaultOptions = {}): { text: str
 /**
  * Wrap an OpenAI client so secrets and PII are stripped from every chat prompt
  * before it leaves your process, and restored in the reply. The model never
- * sees the real values; your app still gets the right answer. Streaming works.
+ * sees the real values; your app still gets the right answer. Streaming works,
+ * and wrapping the same client twice is a no-op.
  *
  * Mutates and returns the client.
  */
 export function wrapOpenAI<T extends OpenAILike>(client: T, opts: VaultOptions = {}): T {
-  const completions = client?.chat?.completions;
+  const completions = client?.chat?.completions as (OpenAICompletions & Marked) | undefined;
   if (!completions || typeof completions.create !== 'function') {
     throw new Error('wrapOpenAI: expected a client with chat.completions.create');
   }
+  if (completions[WRAPPED]) return client;
   const original = completions.create.bind(completions);
 
-  completions.create = ((params: OpenAIParams, ...rest: unknown[]) => {
+  completions.create = (params: OpenAIParams, ...rest: unknown[]) => {
     const vault = createVault(opts);
     const messages = Array.isArray(params?.messages)
       ? params.messages.map((m) => ({ ...m, content: redactContent(m.content, vault) }))
       : params?.messages;
-    const redacted = { ...params, messages };
-    const result = original(redacted, ...rest);
-
+    const result = original({ ...params, messages }, ...rest);
     if (params?.stream) return wrapOpenAIStream(result, vault);
-    return (Promise.resolve(result) as Promise<OpenAIResponse>).then((res) => {
-      if (res && Array.isArray(res.choices)) {
-        res.choices = res.choices.map((c) =>
-          c && c.message ? { ...c, message: { ...c.message, content: vault.restore(c.message.content) } } : c,
-        );
-      }
-      return res;
-    });
-  }) as typeof completions.create;
-
+    return Promise.resolve(result).then((res) => vault.restore(res));
+  };
+  completions[WRAPPED] = true;
   return client;
 }
 
 async function* wrapOpenAIStream(result: unknown, vault: Vault): AsyncGenerator<unknown> {
   const stream = (await result) as AsyncIterable<OpenAIChunk>;
   const r = makeStreamRestorer(vault);
+  let last: OpenAIChunk | undefined;
   for await (const chunk of stream) {
+    last = chunk;
     const content = chunk?.choices?.[0]?.delta?.content;
     if (typeof content === 'string') {
       const out = r.push(content);
       yield {
         ...chunk,
-        choices: chunk.choices.map((c, i) =>
-          i === 0 ? { ...c, delta: { ...c.delta, content: out } } : c,
-        ),
+        choices: chunk.choices.map((c, i) => (i === 0 ? { ...c, delta: { ...c.delta, content: out } } : c)),
       };
     } else {
       yield chunk;
     }
   }
   const tail = r.flush();
-  if (tail) yield { choices: [{ index: 0, delta: { content: tail }, finish_reason: null }] };
+  if (tail) {
+    const base = last ? { id: last.id, object: last.object, model: last.model } : {};
+    yield { ...base, choices: [{ index: 0, delta: { content: tail }, finish_reason: null }] };
+  }
 }
 
 /**
  * Wrap an Anthropic client so secrets and PII are stripped from every message
- * (and the system prompt) before it's sent, and restored in the reply.
+ * and the system prompt before it's sent, and restored in the reply. Streaming
+ * works, and wrapping the same client twice is a no-op.
  *
  * Mutates and returns the client.
  */
 export function wrapAnthropic<T extends AnthropicLike>(client: T, opts: VaultOptions = {}): T {
-  const messages = client?.messages;
+  const messages = client?.messages as (AnthropicMessages & Marked) | undefined;
   if (!messages || typeof messages.create !== 'function') {
     throw new Error('wrapAnthropic: expected a client with messages.create');
   }
+  if (messages[WRAPPED]) return client;
   const original = messages.create.bind(messages);
 
-  messages.create = ((params: AnthropicParams, ...rest: unknown[]) => {
+  messages.create = (params: AnthropicParams, ...rest: unknown[]) => {
     const vault = createVault(opts);
     const redacted: AnthropicParams = {
       ...params,
@@ -125,22 +120,12 @@ export function wrapAnthropic<T extends AnthropicLike>(client: T, opts: VaultOpt
         ? params.messages.map((m) => ({ ...m, content: redactContent(m.content, vault) }))
         : params?.messages,
     };
-    if (typeof params?.system === 'string') redacted.system = vault.redact(params.system);
-    else if (Array.isArray(params?.system)) redacted.system = redactContent(params.system, vault) as unknown[];
-
+    if (params?.system !== undefined) redacted.system = redactContent(params.system, vault);
     const result = original(redacted, ...rest);
-
     if (params?.stream) return wrapAnthropicStream(result, vault);
-    return (Promise.resolve(result) as Promise<AnthropicResponse>).then((res) => {
-      if (res && Array.isArray(res.content)) {
-        res.content = res.content.map((block) =>
-          block && typeof block.text === 'string' ? { ...block, text: vault.restore(block.text) } : block,
-        );
-      }
-      return res;
-    });
-  }) as typeof messages.create;
-
+    return Promise.resolve(result).then((res) => vault.restore(res));
+  };
+  messages[WRAPPED] = true;
   return client;
 }
 
@@ -159,21 +144,25 @@ async function* wrapAnthropicStream(result: unknown, vault: Vault): AsyncGenerat
   if (tail) yield { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: tail } };
 }
 
+type Marked = { [WRAPPED]?: boolean };
+
 interface OpenAIParams {
   messages?: Array<{ content: unknown; [k: string]: unknown }>;
   stream?: boolean;
   [k: string]: unknown;
 }
 interface OpenAIChunk {
+  id?: unknown;
+  object?: unknown;
+  model?: unknown;
   choices: Array<{ delta?: { content?: unknown; [k: string]: unknown }; [k: string]: unknown }>;
   [k: string]: unknown;
 }
-interface OpenAIResponse {
-  choices?: Array<{ message?: { content: unknown; [k: string]: unknown }; [k: string]: unknown }>;
-  [k: string]: unknown;
+interface OpenAICompletions {
+  create: (params: OpenAIParams, ...rest: unknown[]) => unknown;
 }
 interface OpenAILike {
-  chat: { completions: { create: (params: OpenAIParams, ...rest: unknown[]) => unknown } };
+  chat: { completions: OpenAICompletions };
 }
 
 interface AnthropicParams {
@@ -187,10 +176,9 @@ interface AnthropicEvent {
   delta?: { text?: unknown; [k: string]: unknown };
   [k: string]: unknown;
 }
-interface AnthropicResponse {
-  content?: Array<{ text?: unknown; [k: string]: unknown }>;
-  [k: string]: unknown;
+interface AnthropicMessages {
+  create: (params: AnthropicParams, ...rest: unknown[]) => unknown;
 }
 interface AnthropicLike {
-  messages: { create: (params: AnthropicParams, ...rest: unknown[]) => unknown };
+  messages: AnthropicMessages;
 }
