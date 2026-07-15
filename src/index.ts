@@ -1,4 +1,5 @@
 import { SENSITIVE_KEY_DETECTOR } from './detectors.js';
+import { createVault } from './vault.js';
 import {
   resolveDetectors,
   keyMatcher,
@@ -103,14 +104,26 @@ export function summary(
   return { total: findings.length, byDetector };
 }
 
+/**
+ * Bind one set of options into a policy you reuse everywhere — in code, on a
+ * logger, in HTTP, in front of an LLM. `options` is the same object every
+ * adapter (`flare-redact/pino`, `/winston`, `/http`, `/llm`) accepts, so a
+ * secret is masked the same way across your whole system.
+ */
 export function createRedactor(opts: RedactOptions = {}) {
   return {
+    options: opts,
     redact: <T>(input: T) => redact(input, opts),
     scan: (input: unknown) => scan(input, opts),
     isClean: (input: unknown) => isClean(input, opts),
     summary: (input: unknown) => summary(input, opts),
+    vault: () => createVault(opts),
+    wrapConsole: (target?: Console) => wrapConsole(opts, target),
   };
 }
+
+/** Alias for {@link createRedactor}, read as "define the masking policy once". */
+export const definePolicy = createRedactor;
 
 type ConsoleMethod = 'log' | 'info' | 'warn' | 'error' | 'debug';
 type LogFn = (...args: unknown[]) => void;

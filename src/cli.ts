@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { redact, scan, summary, DETECTORS, type Mode, type RedactOptions, type Finding } from './index.js';
 
-const VERSION = '0.3.0';
+const VERSION = '0.4.0';
 
 const HELP = `flare-redact — hide secrets & PII before they hit a log
 

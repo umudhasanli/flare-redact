@@ -51,6 +51,7 @@ Nothing to configure. No list of field paths to maintain. No native build step.
 - [Reversible redaction](#reversible-redaction)
 - [See what leaks, and why](#see-what-leaks-and-why)
 - [Guard your logger in one line](#guard-your-logger-in-one-line)
+- [One policy, everywhere](#one-policy-everywhere)
 - [Streams](#streams)
 - [Fail a build when a secret sneaks in](#fail-a-build-when-a-secret-sneaks-in)
 - [CLI](#cli)
@@ -218,6 +219,49 @@ const safe = createRedactor({ enable: ['high_entropy'] });
 logger.info(safe.redact({ event: 'checkout', user }));
 ```
 
+## One policy, everywhere
+
+Define what "sensitive" means once, and apply it at every layer — your app, your
+logger, your HTTP boundary, your LLM calls. Every adapter takes the same options
+object, so a secret is masked the same way across the whole system.
+
+```js
+import { definePolicy } from 'flare-redact';
+const policy = { enable: ['high_entropy'], allow: ['status@acme.com'] };
+```
+
+**pino** — reads the values, not a list of field paths you have to maintain:
+
+```js
+import pino from 'pino';
+import { pinoRedact } from 'flare-redact/pino';
+
+const log = pino(pinoRedact(policy));
+log.info({ user: 'bob@corp.com' }); // → {"user":"b***@***"}
+```
+
+**winston** — a format that redacts every field, symbol metadata left intact:
+
+```js
+import winston from 'winston';
+import { winstonRedact } from 'flare-redact/winston';
+
+winston.format.combine(winston.format(winstonRedact(policy))(), winston.format.json());
+```
+
+**HTTP** — a safe-to-log snapshot of a request; the live request is untouched:
+
+```js
+import { httpRedactor } from 'flare-redact/http';
+
+app.use(httpRedactor(policy));
+app.use((req, _res, next) => { logger.info(req.redacted()); next(); });
+// Authorization and Cookie headers, and any secret in the body or query, are masked.
+```
+
+Same `policy` object flows into `flare-redact/llm`, `wrapConsole`, `createVault`,
+and `redactStream` too.
+
 ## Streams
 
 Pipe any log stream through it — secrets are masked line by line, even when one
@@ -316,11 +360,17 @@ redact<T>(input: T, opts?): T                 // masked copy, same shape
 scan(input, opts?): Finding[]                 // findings + why, input untouched
 isClean(input, opts?): boolean                // any secrets at all?
 summary(input, opts?): { total, byDetector }  // counts per detector
-createRedactor(opts): { redact, scan, isClean, summary }
+createRedactor(opts) / definePolicy(opts)      // one policy: redact, scan, vault(), wrapConsole, options
 wrapConsole(opts?, console?): () => void      // patch console.*, returns restore
 
 createVault(opts?): Vault                      // reversible: redact / restore / entries
 restore(input, vaultOrMap): T                  // put originals back
+
+// adapters — each takes the same options object
+pinoRedact(opts?)        // 'flare-redact/pino'    → { formatters: { log } }
+winstonRedact(opts?)     // 'flare-redact/winston' → a format transform
+redactHttp(req, opts?)   // 'flare-redact/http'    → safe-to-log request snapshot
+httpRedactor(opts?)      // 'flare-redact/http'    → Express/Connect middleware
 
 // from 'flare-redact/llm'
 wrapOpenAI(client, opts?)                       // scrub prompts, restore replies (+streaming)

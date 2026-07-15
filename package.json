@@ -1,6 +1,6 @@
 {
   "name": "flare-redact",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Hide secrets & PII in logs, prompts, and text before they leak — with a reversible layer that keeps them out of your OpenAI/Anthropic calls. Zero dependencies, ReDoS-safe.",
   "type": "module",
   "sideEffects": false,
@@ -18,6 +18,18 @@
     "./llm": {
       "types": "./dist/llm.d.ts",
       "default": "./dist/llm.js"
+    },
+    "./pino": {
+      "types": "./dist/pino.d.ts",
+      "default": "./dist/pino.js"
+    },
+    "./winston": {
+      "types": "./dist/winston.d.ts",
+      "default": "./dist/winston.js"
+    },
+    "./http": {
+      "types": "./dist/http.d.ts",
+      "default": "./dist/http.js"
     }
   },
   "bin": {
