@@ -1,6 +1,6 @@
 {
   "name": "flare-redact",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Hide secrets & PII in logs and text before they leak. Zero dependencies, ReDoS-safe patterns, tells you what it found and why.",
   "type": "module",
   "sideEffects": false,
@@ -14,6 +14,10 @@
     "./stream": {
       "types": "./dist/stream.d.ts",
       "default": "./dist/stream.js"
+    },
+    "./llm": {
+      "types": "./dist/llm.d.ts",
+      "default": "./dist/llm.js"
     }
   },
   "bin": {

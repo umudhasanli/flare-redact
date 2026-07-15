@@ -5,7 +5,7 @@
 <h1 align="center">flare-redact</h1>
 
 <p align="center">
-  <b>Hide secrets & PII in logs and text — before they leak.</b>
+  <b>Hide secrets & PII in logs, prompts, and text — before they leak.</b>
 </p>
 
 <p align="center">
@@ -41,7 +41,9 @@ Nothing to configure. No list of field paths to maintain. No native build step.
 
 - [Install](#install)
 - [Redact anything](#redact-anything)
-- [Three ways to hide a value](#three-ways-to-hide-a-value)
+- [Redact prompts before they reach an LLM](#redact-prompts-before-they-reach-an-llm)
+- [Ways to hide a value](#ways-to-hide-a-value)
+- [Reversible redaction](#reversible-redaction)
 - [See what leaks, and why](#see-what-leaks-and-why)
 - [Guard your logger in one line](#guard-your-logger-in-one-line)
 - [Streams](#streams)
@@ -83,7 +85,37 @@ redact({
 // }
 ```
 
-## Three ways to hide a value
+## Redact prompts before they reach an LLM
+
+Your app sends user data to OpenAI or Anthropic. Somewhere in that prompt is a
+customer's email, an API key, or a card number — and now it's left your systems.
+Wrap the client once, and secrets are stripped from every prompt and put back in
+the reply. The model never sees the real values; your code still gets the right
+answer.
+
+```js
+import { wrapOpenAI } from 'flare-redact/llm';
+
+const openai = wrapOpenAI(new OpenAI());
+
+const res = await openai.chat.completions.create({
+  model: 'gpt-4o',
+  messages: [{ role: 'user', content: 'Email the invoice to alice@corp.com, card 4242 4242 4242 4242' }],
+});
+```
+
+```
+your app sends  →  Email the invoice to alice@corp.com, card 4242 4242 4242 4242
+the model sees  →  Email the invoice to [EMAIL_1], card [CREDIT_CARD_1]
+your app gets   →  Sent to alice@corp.com. Card 4242 4242 4242 4242 wasn't stored.
+```
+
+`wrapAnthropic` does the same for `messages.create`, including the system prompt.
+Both handle streaming — placeholders are restored even when one is split across
+chunks. There's a `redactPrompt(text)` too if you'd rather hold the vault
+yourself.
+
+## Ways to hide a value
 
 Pick a `mode` depending on whether you still need to *reason* about the data
 after it's hidden.
@@ -91,13 +123,16 @@ after it's hidden.
 ```js
 redact('bob@corp.com', { mode: 'mask'  }); // 'b***@***'          (default)
 redact('bob@corp.com', { mode: 'label' }); // '[REDACTED:email]'
-redact('bob@corp.com', { mode: 'hash'  }); // 'email_f63d8d56'
+redact('bob@corp.com', { mode: 'hash'  }); // 'email_f63d8d56'    (deterministic)
+redact('bob@corp.com', { mode: 'fpe'   }); // 'kqz@rwmp.dnu'      (keeps the shape)
 ```
 
 `hash` is the useful one for support work: the same input always hashes to the
 same token, so you can still tell that two log lines came from the same user —
-without ever storing who that user is. Add `hashSalt` to make the tokens
-per-service.
+without ever storing who that user is. `fpe` (format-preserving) keeps the
+*shape* — an email stays email-shaped, a card stays card-shaped — which is what
+you want for realistic-but-safe test data. Both are deterministic; add `hashSalt`
+to make the mapping per-service.
 
 Or replace everything with one fixed string:
 
@@ -105,6 +140,27 @@ Or replace everything with one fixed string:
 redact(payload, { mask: '█' });
 redact(payload, { mask: ({ detector }) => `<${detector.id}>` });
 ```
+
+## Reversible redaction
+
+When you need the originals back — the LLM case above, or handing data to a
+system you don't trust and getting it back — use a vault. It swaps each secret
+for a stable placeholder and remembers the mapping.
+
+```js
+import { createVault } from 'flare-redact';
+
+const vault = createVault();
+const safe = vault.redact('charge bob@corp.com on card 4242 4242 4242 4242');
+// 'charge [EMAIL_1] on card [CREDIT_CARD_1]'
+
+vault.restore(safe);
+// 'charge bob@corp.com on card 4242 4242 4242 4242'
+```
+
+The same value always gets the same placeholder, so references survive the round
+trip. Works on objects too, and `restore()` also takes a plain placeholder→value
+map if you persisted one.
 
 ## See what leaks, and why
 
@@ -257,12 +313,22 @@ isClean(input, opts?): boolean                // any secrets at all?
 summary(input, opts?): { total, byDetector }  // counts per detector
 createRedactor(opts): { redact, scan, isClean, summary }
 wrapConsole(opts?, console?): () => void      // patch console.*, returns restore
-redactStream(opts?): Transform                // from 'flare-redact/stream'
+
+createVault(opts?): Vault                      // reversible: redact / restore / entries
+restore(input, vaultOrMap): T                  // put originals back
+
+// from 'flare-redact/llm'
+wrapOpenAI(client, opts?)                       // scrub prompts, restore replies (+streaming)
+wrapAnthropic(client, opts?)                    // same for messages.create + system
+redactPrompt(text, opts?): { text, vault }
+
+// from 'flare-redact/stream'
+redactStream(opts?): Transform                  // line-wise stream redaction
 
 // opts
 // {
 //   only?, enable?, disable?, custom?,   // which detectors run
-//   mode?: 'mask' | 'label' | 'hash', hashSalt?, mask?,
+//   mode?: 'mask' | 'label' | 'hash' | 'fpe', hashSalt?, mask?,
 //   redactKeys?: boolean | RegExp | string[],
 //   allow?: RegExp | string[],
 // }

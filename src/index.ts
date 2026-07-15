@@ -3,6 +3,7 @@ import {
   SENSITIVE_KEY_RE,
   SENSITIVE_KEY_DETECTOR,
   fnv1a,
+  fpe,
   type Detector,
 } from './detectors.js';
 
@@ -14,10 +15,11 @@ export {
   luhn,
   entropy,
   fnv1a,
+  fpe,
   type Detector,
 } from './detectors.js';
 
-export type Mode = 'mask' | 'label' | 'hash';
+export type Mode = 'mask' | 'label' | 'hash' | 'fpe';
 
 export interface Finding {
   detector: string;
@@ -84,6 +86,7 @@ function makeReplacer(opts: RedactOptions): (value: string, det: Detector) => st
     if (typeof mask === 'function') return mask({ value, detector: det });
     if (mode === 'label') return `[REDACTED:${det.id}]`;
     if (mode === 'hash') return `${det.id}_${fnv1a(salt + value)}`;
+    if (mode === 'fpe') return fpe(value, salt);
     return det.mask ? det.mask(value) : '***';
   };
 }
@@ -239,4 +242,124 @@ export function wrapConsole(opts: RedactOptions = {}, target: Console = console)
   return () => {
     for (const [name, fn] of original) sink[name] = fn;
   };
+}
+
+export interface Vault {
+  redact<T>(input: T): T;
+  restore<T>(input: T): T;
+  entries(): Array<[string, string]>;
+  readonly size: number;
+}
+
+export interface VaultOptions extends RedactOptions {
+  placeholder?: (detectorId: string, index: number) => string;
+}
+
+/**
+ * A reversible redactor. `redact()` swaps each secret for a stable placeholder
+ * (`[EMAIL_1]`) and remembers the mapping; `restore()` puts the originals back.
+ * The same value always gets the same placeholder, so references survive a
+ * round trip — send the redacted text to an LLM, then restore its answer.
+ */
+export function createVault(opts: VaultOptions = {}): Vault {
+  const dets = resolveDetectors(opts);
+  const allow = allowMatcher(opts);
+  const matchKey = keyMatcher(opts);
+  const fmt = opts.placeholder ?? ((id, n) => `[${id.toUpperCase()}_${n}]`);
+
+  const origToPh = new Map<string, string>();
+  const phToOrig = new Map<string, string>();
+  const counts = new Map<string, number>();
+
+  const mint = (value: string, detId: string): string => {
+    const existing = origToPh.get(value);
+    if (existing) return existing;
+    const n = (counts.get(detId) ?? 0) + 1;
+    counts.set(detId, n);
+    const ph = fmt(detId, n);
+    origToPh.set(value, ph);
+    phToOrig.set(ph, value);
+    return ph;
+  };
+
+  const redactStr = (text: string): string => {
+    const hits = scanString(text, dets, allow);
+    if (!hits.length) return text;
+    let out = '';
+    let cursor = 0;
+    for (const h of hits) {
+      out += text.slice(cursor, h.start);
+      out += mint(h.value, h.det.id);
+      cursor = h.end!;
+    }
+    return out + text.slice(cursor);
+  };
+
+  const redactWalk = (value: unknown): unknown => {
+    if (typeof value === 'string') return redactStr(value);
+    if (Array.isArray(value)) return value.map(redactWalk);
+    if (value && typeof value === 'object') {
+      const out: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(value)) {
+        if (typeof v === 'string' && matchKey(k) && !allow(v)) out[k] = mint(v, 'sensitive_key');
+        else out[k] = redactWalk(v);
+      }
+      return out;
+    }
+    return value;
+  };
+
+  const restoreStr = (text: string): string => {
+    if (!phToOrig.size) return text;
+    let out = text;
+    for (const [ph, orig] of phToOrig) out = out.split(ph).join(orig);
+    return out;
+  };
+
+  const restoreWalk = (value: unknown): unknown => {
+    if (typeof value === 'string') return restoreStr(value);
+    if (Array.isArray(value)) return value.map(restoreWalk);
+    if (value && typeof value === 'object') {
+      const out: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(value)) out[k] = restoreWalk(v);
+      return out;
+    }
+    return value;
+  };
+
+  return {
+    redact: <T>(input: T) => redactWalk(input) as T,
+    restore: <T>(input: T) => restoreWalk(input) as T,
+    entries: () => Array.from(phToOrig.entries()),
+    get size() {
+      return phToOrig.size;
+    },
+  };
+}
+
+/** Put originals back into any text/object using a vault or a placeholder→value map. */
+export function restore<T>(input: T, source: Vault | Map<string, string> | Record<string, string>): T {
+  const map: Array<[string, string]> =
+    typeof (source as Vault).entries === 'function'
+      ? (source as Vault).entries()
+      : source instanceof Map
+        ? Array.from(source.entries())
+        : Object.entries(source as Record<string, string>);
+  if (!map.length) return input;
+
+  const walk = (value: unknown): unknown => {
+    if (typeof value === 'string') {
+      let out = value;
+      for (const [ph, orig] of map) out = out.split(ph).join(orig);
+      return out;
+    }
+    if (Array.isArray(value)) return value.map(walk);
+    if (value && typeof value === 'object') {
+      const out: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(value)) out[k] = walk(v);
+      return out;
+    }
+    return value;
+  };
+  return walk(input) as T;
 }

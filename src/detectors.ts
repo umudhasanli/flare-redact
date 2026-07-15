@@ -55,6 +55,39 @@ export function fnv1a(s: string): string {
   return (h >>> 0).toString(16).padStart(8, '0');
 }
 
+function mulberry32(seed: number) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+const FPE_DIGITS = '0123456789';
+const FPE_LOWER = 'abcdefghijklmnopqrstuvwxyz';
+const FPE_UPPER = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+/**
+ * Format-preserving pseudonym: same length and character classes as the input,
+ * so an email stays email-shaped and a card stays card-shaped. Deterministic —
+ * the same value (and salt) always maps to the same output, which keeps joins
+ * and references intact across a dataset.
+ */
+export function fpe(value: string, salt = ''): string {
+  const seed = parseInt(fnv1a(salt + value), 16) >>> 0;
+  const rand = mulberry32(seed || 1);
+  let out = '';
+  for (const ch of value) {
+    if (ch >= '0' && ch <= '9') out += FPE_DIGITS[Math.floor(rand() * 10)];
+    else if (ch >= 'a' && ch <= 'z') out += FPE_LOWER[Math.floor(rand() * 26)];
+    else if (ch >= 'A' && ch <= 'Z') out += FPE_UPPER[Math.floor(rand() * 26)];
+    else out += ch;
+  }
+  return out;
+}
+
 export const SENSITIVE_KEY_RE =
   /^(?:pass(?:word|wd)?|secret|token|api[_-]?key|access[_-]?key|client[_-]?secret|private[_-]?key|auth(?:orization)?|cookie|session[_-]?id|refresh[_-]?token|credit[_-]?card|card[_-]?number|cvv|ssn)$/i;
 

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { redact, scan, summary, DETECTORS, type Mode, type RedactOptions, type Finding } from './index.js';
 
-const VERSION = '0.2.0';
+const VERSION = '0.3.0';
 
 const HELP = `flare-redact — hide secrets & PII before they hit a log
 
@@ -12,7 +12,7 @@ OPTIONS
   --scan            list what would be redacted, and why (input unchanged)
   --summary         print a count of findings per detector
   --json            parse input as JSON and redact recursively
-  --mode <m>        mask | label | hash        (default: mask)
+  --mode <m>        mask | label | hash | fpe  (default: mask)
   --hash-salt <s>   salt for --mode hash
   --only <ids>      use only these detectors (comma-separated)
   --enable <ids>    turn on extra detectors (e.g. ipv4,high_entropy)
