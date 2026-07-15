@@ -25,6 +25,7 @@ export {
   fpe,
 } from './detectors.js';
 export { createVault, restore, buildRestore, type Vault, type VaultOptions } from './vault.js';
+export { createSession, type Session, type SessionOptions, type StreamRestorer } from './session.js';
 
 export function redact<T>(input: T, opts: RedactOptions = {}): T {
   const dets = resolveDetectors(opts);

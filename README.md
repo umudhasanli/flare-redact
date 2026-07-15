@@ -66,6 +66,7 @@ Nothing to configure. No list of field paths to maintain. No native build step.
 - [Redact prompts before they reach an LLM](#redact-prompts-before-they-reach-an-llm)
 - [Ways to hide a value](#ways-to-hide-a-value)
 - [Reversible redaction](#reversible-redaction)
+- [Build a private chat app](#build-a-private-chat-app)
 - [See what leaks, and why](#see-what-leaks-and-why)
 - [Guard your logger in one line](#guard-your-logger-in-one-line)
 - [One policy, everywhere](#one-policy-everywhere)
@@ -187,6 +188,40 @@ vault.restore(safe);
 The same value always gets the same placeholder, so references survive the round
 trip. Works on objects too, and `restore()` also takes a plain placeholder→value
 map if you persisted one.
+
+## Build a private chat app
+
+If you're building a chat interface — over your own local model or any API — a
+**session** is the drop-in layer. One session holds one vault, so a value keeps
+the same placeholder across every turn: mask the user's message on the way in,
+restore the model's reply on the way out. It's model-agnostic, synchronous, and
+fast enough that the cost vanishes next to inference (a 13 KB message redacts in
+~0.3 ms).
+
+```js
+import { createSession } from 'flare-redact';
+
+const session = createSession({ enable: ['pii'] });
+
+// on the way in — the model only ever sees placeholders
+const prompt = session.redact(userMessage);
+const reply = await myModel.generate(prompt);
+
+// on the way out — the user sees the real values back
+show(session.restore(reply));
+```
+
+Streaming? Restore token by token, even when a placeholder is split across chunks:
+
+```js
+const out = session.stream();
+for await (const chunk of modelStream) process(out.push(chunk.text));
+process(out.flush());
+```
+
+`session.redactMessages([{ role, content }])` masks a whole chat array at once,
+and `session.reset()` starts a fresh conversation. The model never sees the real
+data; your app still works end to end.
 
 ## See what leaks, and why
 
