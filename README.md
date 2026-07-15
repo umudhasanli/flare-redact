@@ -14,7 +14,14 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License"></a>
   <img src="https://img.shields.io/npm/types/flare-redact.svg" alt="TypeScript">
   <img src="https://img.shields.io/badge/dependencies-0-brightgreen" alt="Zero dependencies">
+  <img src="https://img.shields.io/badge/languages-20%2B-4f46e5" alt="20+ languages">
+  <img src="https://img.shields.io/badge/national%20IDs-10-4f46e5" alt="10 national IDs">
   <img src="https://img.shields.io/badge/runtime-node%20%7C%20browser%20%7C%20edge-blue" alt="Runtimes">
+</p>
+
+<p align="center">
+  🌐 <b>International by default</b> — 20+ languages ·
+  🇹🇷 🇩🇪 🇪🇸 🇮🇹 🇧🇷 🇳🇱 🇵🇱 🇨🇦 🇺🇸 checksum-validated national IDs · IBAN
 </p>
 
 ---
@@ -44,7 +51,10 @@ Nothing to configure. No list of field paths to maintain. No native build step.
 > [Jump to it ↓](#redact-prompts-before-they-reach-an-llm)
 
 <p align="center">
-  <img src="assets/coverage.svg" alt="One policy applied across app, logs, HTTP, LLM, datasets, and egress" width="820">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/coverage-dark.svg">
+    <img src="assets/coverage-light.svg" alt="One policy applied across app, logs, HTTP, LLM, datasets, and egress" width="820">
+  </picture>
 </p>
 
 |   |   |   |
@@ -398,16 +408,16 @@ redact(text, { enable: ['tr', 'de'] });   // just Turkish and German
 
 | Detector | Country | Validated by |
 |---|---|---|
-| `iban` | international *(on by default)* | ISO 13616 mod-97 |
-| `tr_tckn` | Turkey | TCKN checksum |
-| `de_tax_id` | Germany | ISO 7064 mod-11,10 |
-| `es_dni` | Spain (DNI/NIE) | control letter mod-23 |
-| `it_codice_fiscale` | Italy | odd/even table |
-| `br_cpf` | Brazil | two mod-11 digits |
-| `nl_bsn` | Netherlands | 11-test |
-| `pl_pesel` | Poland | weighted mod-10 |
-| `ca_sin` | Canada | Luhn |
-| `us_ssn` | United States | issued-range rules |
+| `iban` | 🌐 international *(on by default)* | ISO 13616 mod-97 |
+| `tr_tckn` | 🇹🇷 Turkey | TCKN checksum |
+| `de_tax_id` | 🇩🇪 Germany | ISO 7064 mod-11,10 |
+| `es_dni` | 🇪🇸 Spain (DNI/NIE) | control letter mod-23 |
+| `it_codice_fiscale` | 🇮🇹 Italy | odd/even table |
+| `br_cpf` | 🇧🇷 Brazil | two mod-11 digits |
+| `nl_bsn` | 🇳🇱 Netherlands | 11-test |
+| `pl_pesel` | 🇵🇱 Poland | weighted mod-10 |
+| `ca_sin` | 🇨🇦 Canada | Luhn |
+| `us_ssn` | 🇺🇸 United States | issued-range rules |
 
 Every algorithm has its own tests against known-valid and known-invalid numbers,
 so enabling them won't turn your logs into a wall of `[REDACTED]`.
