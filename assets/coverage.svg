@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 268" width="900" height="268" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arw" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#e8590c"/>
+    </marker>
+    <style>
+      .chip { fill: rgba(232,89,12,0.07); stroke: rgba(232,89,12,0.55); stroke-width: 1.5; }
+      .title { fill: #e8590c; font-weight: 700; font-size: 15px; }
+      .sub { fill: #e8590c; fill-opacity: 0.72; font-size: 11.5px; }
+      .hub { fill: rgba(232,89,12,0.12); stroke: #e8590c; stroke-width: 2; }
+      .hubt { fill: #e8590c; font-weight: 700; font-size: 15px; }
+      .hubs { fill: #e8590c; fill-opacity: 0.72; font-size: 11px; font-family: ui-monospace, Menlo, Consolas, monospace; }
+      .link { stroke: rgba(232,89,12,0.4); stroke-width: 1.5; fill: none; }
+    </style>
+  </defs>
+
+  <!-- hub -->
+  <rect class="hub" x="28" y="98" width="196" height="72" rx="13"/>
+  <text class="hubt" x="126" y="128" text-anchor="middle">one policy</text>
+  <text class="hubs" x="126" y="150" text-anchor="middle">{ mode, allow, … }</text>
+
+  <!-- connectors -->
+  <path class="link" d="M224 134 C 260 134, 268 60, 300 60"  marker-end="url(#arw)"/>
+  <path class="link" d="M224 134 C 262 134, 270 134, 300 134" marker-end="url(#arw)"/>
+  <path class="link" d="M224 134 C 260 134, 268 208, 300 208" marker-end="url(#arw)"/>
+
+  <!-- column 1 -->
+  <g>
+    <rect class="chip" x="308" y="34"  width="252" height="52" rx="10"/>
+    <text class="title" x="326" y="60">App</text>
+    <text class="sub"   x="326" y="76">redact() · scan() · vault</text>
+
+    <rect class="chip" x="308" y="108" width="252" height="52" rx="10"/>
+    <text class="title" x="326" y="134">Logs</text>
+    <text class="sub"   x="326" y="150">console · pino · winston · stream</text>
+
+    <rect class="chip" x="308" y="182" width="252" height="52" rx="10"/>
+    <text class="title" x="326" y="208">HTTP</text>
+    <text class="sub"   x="326" y="224">express / connect middleware</text>
+  </g>
+
+  <!-- column 2 -->
+  <g>
+    <rect class="chip" x="584" y="34"  width="288" height="52" rx="10"/>
+    <text class="title" x="602" y="60">LLM</text>
+    <text class="sub"   x="602" y="76">openai · anthropic · reversible</text>
+
+    <rect class="chip" x="584" y="108" width="288" height="52" rx="10"/>
+    <text class="title" x="602" y="134">Dataset</text>
+    <text class="sub"   x="602" y="150">csv · fpe · join-consistent</text>
+
+    <rect class="chip" x="584" y="182" width="288" height="52" rx="10"/>
+    <text class="title" x="602" y="208">Egress</text>
+    <text class="sub"   x="602" y="224">fetch guard to named hosts</text>
+  </g>
+</svg>

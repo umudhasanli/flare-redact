@@ -12,6 +12,7 @@
   <a href="https://www.npmjs.com/package/flare-redact"><img src="https://img.shields.io/npm/v/flare-redact.svg" alt="npm"></a>
   <a href="https://github.com/umudhasanli/flare-redact/actions/workflows/ci.yml"><img src="https://github.com/umudhasanli/flare-redact/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License"></a>
+  <img src="https://img.shields.io/npm/types/flare-redact.svg" alt="TypeScript">
   <img src="https://img.shields.io/badge/dependencies-0-brightgreen" alt="Zero dependencies">
   <img src="https://img.shields.io/badge/runtime-node%20%7C%20browser%20%7C%20edge-blue" alt="Runtimes">
 </p>
@@ -41,6 +42,15 @@ Nothing to configure. No list of field paths to maintain. No native build step.
 > Anthropic client and secrets are stripped from every prompt and restored in the
 > reply — the model never sees the real data, your app still gets the right answer.
 > [Jump to it ↓](#redact-prompts-before-they-reach-an-llm)
+
+<p align="center">
+  <img src="assets/coverage.svg" alt="One policy applied across app, logs, HTTP, LLM, datasets, and egress" width="820">
+</p>
+
+|   |   |   |
+|---|---|---|
+| 🔍 **Content-aware** — reads values, not just field names | ♻️ **Reversible** — vault: redact → use → restore | 🎭 **Format-preserving** — emails stay email-shaped |
+| 🤖 **LLM-safe** — strips secrets before OpenAI/Anthropic | 🗃️ **Consistent** — same value → same mask, joins survive | 🛡️ **ReDoS-safe · 0 deps** — safe on untrusted input |
 
 ## Contents
 
