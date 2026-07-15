@@ -52,6 +52,8 @@ Nothing to configure. No list of field paths to maintain. No native build step.
 - [See what leaks, and why](#see-what-leaks-and-why)
 - [Guard your logger in one line](#guard-your-logger-in-one-line)
 - [One policy, everywhere](#one-policy-everywhere)
+- [Anonymize a dataset for staging](#anonymize-a-dataset-for-staging)
+- [Guard what leaves your app](#guard-what-leaves-your-app)
 - [Streams](#streams)
 - [Fail a build when a secret sneaks in](#fail-a-build-when-a-secret-sneaks-in)
 - [CLI](#cli)
@@ -273,9 +275,43 @@ import { redactStream } from 'flare-redact/stream';
 process.stdin.pipe(redactStream()).pipe(process.stdout);
 ```
 
+## Anonymize a dataset for staging
+
+Point it at a JSON or CSV dump with `--mode fpe` and you get a copy that's safe
+to hand to staging or a test suite. Format-preserving means an email stays
+email-shaped and a card stays card-shaped; deterministic means the same value
+maps the same way in every row — so foreign keys and joins still line up.
+
+```bash
+flare-redact --csv --mode fpe < customers.csv > customers.safe.csv
+```
+
+```
+Alice,alice@corp.com,4242 4242 4242 4242      Alice,lkjjg@vfld.adz,7042 5270 7797 8929
+Bob,bob@corp.com,5555 5555 5555 4444     →    Bob,yay@vjxl.fpe,0888 2706 6232 0279
+Alice,alice@corp.com,4242 4242 4242 4242      Alice,lkjjg@vfld.adz,7042 5270 7797 8929
+```
+
+`redactCsv(text, opts)` is available from `flare-redact/csv` for the same thing
+in code.
+
+## Guard what leaves your app
+
+Stop PII from reaching an analytics, telemetry, or webhook endpoint — wrap
+`fetch` and name the hosts you don't trust with the real data. Every other
+request goes through untouched, so your real API calls are never altered.
+
+```js
+import { wrapFetch } from 'flare-redact/fetch';
+
+const fetch = wrapFetch(globalThis.fetch, { hosts: ['api.segment.io', 'telemetry.vendor.com'] });
+// bodies sent to those hosts are redacted; everything else is left alone
+```
+
 ## Fail a build when a secret sneaks in
 
-`scan` from code, or `--scan` from the CLI (which exits non-zero on a hit):
+`scan` from code, or `--scan` from the CLI (which exits non-zero on a hit) — drop
+it into CI or a pre-commit hook:
 
 ```yaml
 - run: git ls-files '*.env*' '*.log' '*.json' | xargs npx flare-redact --scan
@@ -290,6 +326,7 @@ npm install -g flare-redact
 ```bash
 tail -f app.log | flare-redact               # stream redacted logs
 flare-redact --json --mode hash < event.json # deep-redact a JSON payload
+flare-redact --csv --mode fpe < dump.csv     # anonymize a dataset for staging
 flare-redact --scan config.env               # list findings + why (exit 1 if any)
 flare-redact --summary --json < event.json   # counts per detector
 flare-redact --enable high_entropy < app.log # also catch unknown-format keys
@@ -371,6 +408,8 @@ pinoRedact(opts?)        // 'flare-redact/pino'    → { formatters: { log } }
 winstonRedact(opts?)     // 'flare-redact/winston' → a format transform
 redactHttp(req, opts?)   // 'flare-redact/http'    → safe-to-log request snapshot
 httpRedactor(opts?)      // 'flare-redact/http'    → Express/Connect middleware
+redactCsv(text, opts?)   // 'flare-redact/csv'     → anonymize a CSV dataset
+wrapFetch(fetch, opts?)  // 'flare-redact/fetch'   → redact egress to named hosts
 
 // from 'flare-redact/llm'
 wrapOpenAI(client, opts?)                       // scrub prompts, restore replies (+streaming)

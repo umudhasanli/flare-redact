@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { redact, scan, summary, DETECTORS, type Mode, type RedactOptions, type Finding } from './index.js';
+import { redactCsv } from './csv.js';
 
-const VERSION = '0.4.0';
+const VERSION = '0.5.0';
 
 const HELP = `flare-redact — hide secrets & PII before they hit a log
 
@@ -12,6 +13,7 @@ OPTIONS
   --scan            list what would be redacted, and why (input unchanged)
   --summary         print a count of findings per detector
   --json            parse input as JSON and redact recursively
+  --csv             parse input as CSV and redact every cell
   --mode <m>        mask | label | hash | fpe  (default: mask)
   --hash-salt <s>   salt for --mode hash
   --only <ids>      use only these detectors (comma-separated)
@@ -36,6 +38,7 @@ interface ParsedArgs {
   scanMode: boolean;
   summaryMode: boolean;
   jsonMode: boolean;
+  csvMode: boolean;
   showHelp: boolean;
   showVersion: boolean;
   listMode: boolean;
@@ -51,6 +54,7 @@ function parseArgs(argv: string[]): ParsedArgs {
   let scanMode = false;
   let summaryMode = false;
   let jsonMode = false;
+  let csvMode = false;
   let showHelp = false;
   let showVersion = false;
   let listMode = false;
@@ -61,6 +65,7 @@ function parseArgs(argv: string[]): ParsedArgs {
       case '--scan': scanMode = true; break;
       case '--summary': summaryMode = true; break;
       case '--json': jsonMode = true; break;
+      case '--csv': csvMode = true; break;
       case '--list': listMode = true; break;
       case '-h': case '--help': showHelp = true; break;
       case '-v': case '--version': showVersion = true; break;
@@ -76,7 +81,7 @@ function parseArgs(argv: string[]): ParsedArgs {
         files.push(a);
     }
   }
-  return { opts, files, scanMode, summaryMode, jsonMode, showHelp, showVersion, listMode };
+  return { opts, files, scanMode, summaryMode, jsonMode, csvMode, showHelp, showVersion, listMode };
 }
 
 function readStdin(): string {
@@ -105,7 +110,7 @@ export function main(argv: string[]): number {
     process.stderr.write(`${(e as Error).message}\n\n${HELP}`);
     return 2;
   }
-  const { opts, files, scanMode, summaryMode, jsonMode, showHelp, showVersion, listMode } = parsed;
+  const { opts, files, scanMode, summaryMode, jsonMode, csvMode, showHelp, showVersion, listMode } = parsed;
 
   if (showHelp) { process.stdout.write(HELP); return 0; }
   if (showVersion) { process.stdout.write(`${VERSION}\n`); return 0; }
@@ -134,6 +139,11 @@ export function main(argv: string[]): number {
 
   if (jsonMode) {
     process.stdout.write(JSON.stringify(redact(data, opts), null, 2) + '\n');
+    return 0;
+  }
+
+  if (csvMode) {
+    process.stdout.write(redactCsv(raw, opts) + '\n');
     return 0;
   }
 
