@@ -37,6 +37,11 @@ redact('User alice@corp.com paid with 4242 4242 4242 4242, token ghp_' + 'a'.rep
 
 Nothing to configure. No list of field paths to maintain. No native build step.
 
+> **The same problem now has a new address: your LLM calls.** Wrap your OpenAI or
+> Anthropic client and secrets are stripped from every prompt and restored in the
+> reply — the model never sees the real data, your app still gets the right answer.
+> [Jump to it ↓](#redact-prompts-before-they-reach-an-llm)
+
 ## Contents
 
 - [Install](#install)

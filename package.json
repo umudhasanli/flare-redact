@@ -1,7 +1,7 @@
 {
   "name": "flare-redact",
   "version": "0.3.0",
-  "description": "Hide secrets & PII in logs and text before they leak. Zero dependencies, ReDoS-safe patterns, tells you what it found and why.",
+  "description": "Hide secrets & PII in logs, prompts, and text before they leak — with a reversible layer that keeps them out of your OpenAI/Anthropic calls. Zero dependencies, ReDoS-safe.",
   "type": "module",
   "sideEffects": false,
   "main": "./dist/index.js",
@@ -76,7 +76,20 @@
     "redos",
     "zero-dependency",
     "typescript",
-    "cli"
+    "cli",
+    "llm",
+    "ai",
+    "openai",
+    "anthropic",
+    "chatgpt",
+    "claude",
+    "prompt",
+    "ai-privacy",
+    "data-anonymization",
+    "anonymization",
+    "pseudonymization",
+    "tokenization",
+    "format-preserving"
   ],
   "author": {
     "name": "Umud Hasanli",
