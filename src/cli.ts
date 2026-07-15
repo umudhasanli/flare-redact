@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { redact, scan, summary, DETECTORS, type Mode, type RedactOptions, type Finding } from './index.js';
 import { redactCsv } from './csv.js';
 
-const VERSION = '0.6.0';
+const VERSION = '0.6.1';
 
 const HELP = `flare-redact — hide secrets & PII before they hit a log
 

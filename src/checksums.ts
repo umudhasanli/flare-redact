@@ -102,6 +102,49 @@ export function deTaxIdValid(value: string): boolean {
   return check === Number(d[10]);
 }
 
+/** US ABA routing number — 9 digits, weighted 3-7-1 mod-10. */
+export function abaValid(value: string): boolean {
+  const d = onlyDigits(value);
+  if (d.length !== 9) return false;
+  let sum = 0;
+  for (let i = 0; i < 9; i += 3) {
+    sum += 3 * Number(d[i]) + 7 * Number(d[i + 1]) + Number(d[i + 2]);
+  }
+  return sum !== 0 && sum % 10 === 0;
+}
+
+/** UK NHS number — 10 digits, weighted mod-11 check digit. */
+export function nhsValid(value: string): boolean {
+  const d = onlyDigits(value);
+  if (d.length !== 10 || /^(\d)\1{9}$/.test(d)) return false;
+  let sum = 0;
+  for (let i = 0; i < 9; i++) sum += Number(d[i]) * (10 - i);
+  let check = 11 - (sum % 11);
+  if (check === 11) check = 0;
+  if (check === 10) return false;
+  return check === Number(d[9]);
+}
+
+const VIN_TRANS: Record<string, number> = {
+  A: 1, B: 2, C: 3, D: 4, E: 5, F: 6, G: 7, H: 8, J: 1, K: 2, L: 3, M: 4, N: 5,
+  P: 7, R: 9, S: 2, T: 3, U: 4, V: 5, W: 6, X: 7, Y: 8, Z: 9,
+};
+const VIN_WEIGHTS = [8, 7, 6, 5, 4, 3, 2, 10, 0, 9, 8, 7, 6, 5, 4, 3, 2];
+/** Vehicle VIN — 17 chars, transliterated weighted mod-11 check at position 9. */
+export function vinValid(value: string): boolean {
+  const v = value.toUpperCase();
+  if (!/^[A-HJ-NPR-Z0-9]{17}$/.test(v)) return false;
+  let sum = 0;
+  for (let i = 0; i < 17; i++) {
+    const c = v[i]!;
+    const t = c >= '0' && c <= '9' ? Number(c) : VIN_TRANS[c];
+    if (t === undefined) return false;
+    sum += t * VIN_WEIGHTS[i]!;
+  }
+  const check = sum % 11;
+  return v[8] === (check === 10 ? 'X' : String(check));
+}
+
 /** US SSN — no checksum exists, but whole ranges are never issued. */
 export function ssnValid(value: string): boolean {
   const m = value.match(/^(\d{3})-?(\d{2})-?(\d{4})$/);

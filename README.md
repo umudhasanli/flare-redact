@@ -14,14 +14,14 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License"></a>
   <img src="https://img.shields.io/npm/types/flare-redact.svg" alt="TypeScript">
   <img src="https://img.shields.io/badge/dependencies-0-brightgreen" alt="Zero dependencies">
-  <img src="https://img.shields.io/badge/languages-20%2B-4f46e5" alt="20+ languages">
-  <img src="https://img.shields.io/badge/national%20IDs-10-4f46e5" alt="10 national IDs">
+  <img src="https://img.shields.io/badge/languages-24-4f46e5" alt="24 languages">
+  <img src="https://img.shields.io/badge/detectors-50-4f46e5" alt="50 detectors">
   <img src="https://img.shields.io/badge/runtime-node%20%7C%20browser%20%7C%20edge-blue" alt="Runtimes">
 </p>
 
 <p align="center">
-  🌐 <b>International by default</b> — 20+ languages ·
-  🇹🇷 🇩🇪 🇪🇸 🇮🇹 🇧🇷 🇳🇱 🇵🇱 🇨🇦 🇺🇸 checksum-validated national IDs · IBAN
+  🌐 <b>International by default — 24 languages</b><br>
+  🇬🇧 🇨🇳 🇮🇳 🇪🇸 🇸🇦 🇫🇷 🇵🇹 🇷🇺 🇯🇵 🇩🇪 🇰🇷 🇹🇷 🇮🇹 🇮🇷 🇵🇱 🇺🇦 🇳🇱 🇻🇳 🇮🇩 🇹🇭 🇬🇷 🇮🇱 🇦🇿 🇷🇴
 </p>
 
 ---
@@ -60,7 +60,7 @@ Nothing to configure. No list of field paths to maintain. No native build step.
 |   |   |   |
 |---|---|---|
 | 🔍 **Content-aware** — reads values, not just field names | ♻️ **Reversible** — vault: redact → use → restore | 🎭 **Format-preserving** — emails stay email-shaped |
-| 🤖 **LLM-safe** — strips secrets before OpenAI/Anthropic | 🌍 **20+ languages** — plus checksum-validated national IDs | 🛡️ **ReDoS-safe · 0 deps** — safe on untrusted input |
+| 🤖 **LLM-safe** — strips secrets before OpenAI/Anthropic | 🌍 **24 languages** — plus checksum-validated national IDs | 🛡️ **ReDoS-safe · 0 deps** — safe on untrusted input |
 
 ## Contents
 
@@ -375,18 +375,25 @@ On by default:
 | `bearer_token` | `Authorization: Bearer …` |
 | `basic_auth` | `Authorization: Basic …` |
 | `url_credentials` | passwords inside connection strings |
-| `generic_assignment` | `password=`, `api_key: …`, `secret=…` |
+| `generic_assignment` | `password=`, `api_key: …`, `secret=…` (any language) |
 | `email` | email addresses |
 | `credit_card` | card numbers (Luhn-validated) |
+| `iban` | IBANs (mod-97 validated) |
+| `discord_bot_token` / `telegram_bot_token` | chat bot tokens |
+| `shopify_token` / `square_token` | commerce tokens |
+| `digitalocean_token` / `azure_storage_key` | cloud secrets |
+| `sentry_dsn` / `new_relic_key` | observability secrets |
 
 Opt in with `enable`:
 
-| Detector | Finds |
+| Detector / tag | Finds |
 |---|---|
 | `high_entropy` | long random-looking tokens of *any* format (entropy-based) |
+| `crypto` | Bitcoin & Ethereum addresses, BIP39 seed phrases |
+| `finance` | SWIFT/BIC, US ABA routing numbers |
+| `vehicle` | VINs (checksum-validated) |
+| `network` | IPs, MAC addresses, coordinates, internal URLs |
 | `phone` | E.164 phone numbers |
-| `ipv4` / `ipv6` | IP addresses |
-| `mac_address` | MAC addresses |
 
 Plus object values whose **key name** is sensitive (`password`, `token`,
 `authorization`, `cookie`, `cvv`, …) are masked regardless of content.
@@ -395,7 +402,7 @@ Plus object values whose **key name** is sensitive (`password`, `token`,
 
 Secrets like API keys and card numbers don't care what language your app is in.
 Neither does this — but the word-based checks do, so `password`, `secret`, and
-`token` are recognized in **20+ languages** (`şifrə=…`, `密码: …`, `пароль=…`,
+`token` are recognized in **24 languages** (`şifrə=…`, `密码: …`, `пароль=…`,
 `contraseña: …`), as assignments and as object keys.
 
 National IDs are opt-in and **checksum-validated**, so a random run of digits is
@@ -418,6 +425,7 @@ redact(text, { enable: ['tr', 'de'] });   // just Turkish and German
 | `pl_pesel` | 🇵🇱 Poland | weighted mod-10 |
 | `ca_sin` | 🇨🇦 Canada | Luhn |
 | `us_ssn` | 🇺🇸 United States | issued-range rules |
+| `uk_nhs` | 🇬🇧 United Kingdom (NHS) | weighted mod-11 |
 
 Every algorithm has its own tests against known-valid and known-invalid numbers,
 so enabling them won't turn your logs into a wall of `[REDACTED]`.

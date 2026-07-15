@@ -3,9 +3,13 @@ import assert from 'node:assert/strict';
 import {
   luhnCheck, ibanValid, tcknValid, cpfValid, dniValid,
   bsnValid, peselValid, deTaxIdValid, codiceFiscaleValid, ssnValid,
+  abaValid, nhsValid, vinValid,
 } from '../dist/checksums.js';
 
 const cases = [
+  ['ABA', abaValid, ['021000021', '011401533'], ['021000022', '123456789']],
+  ['NHS', nhsValid, ['9434765919'], ['9434765918', '0000000000']],
+  ['VIN', vinValid, ['1HGCM82633A004352', '11111111111111111'], ['1HGCM82633A004353']],
   ['IBAN', ibanValid, ['GB82WEST12345698765432', 'DE89370400440532013000', 'FR1420041010050500013M02606'], ['GB82WEST12345698765433', 'ZZ00NOPE']],
   ['TCKN', tcknValid, ['10000000146'], ['10000000145', '00000000000']],
   ['CPF', cpfValid, ['11144477735', '111.444.777-35'], ['11144477734', '11111111111']],

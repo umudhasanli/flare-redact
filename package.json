@@ -1,6 +1,6 @@
 {
   "name": "flare-redact",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "Hide secrets & PII in logs, prompts, and text before they leak — with a reversible layer that keeps them out of your OpenAI/Anthropic calls. Zero dependencies, ReDoS-safe.",
   "type": "module",
   "sideEffects": false,

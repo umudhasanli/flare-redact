@@ -8,60 +8,56 @@
 export const SECRET_KEYWORDS: string[] = Array.from(
   new Set(
     [
-      // English
+      // 1. English
       'password', 'passwd', 'pwd', 'secret', 'token', 'apikey', 'api_key', 'api-key',
       'access_key', 'access-key', 'accesskey', 'secret_key', 'client_secret',
       'private_key', 'privatekey', 'credential', 'credentials', 'auth_token', 'passphrase',
-      // Spanish
-      'contraseña', 'contrasena', 'clave', 'secreto', 'credencial',
-      // Portuguese
-      'senha', 'segredo', 'chave_secreta',
-      // German
-      'passwort', 'kennwort', 'geheimnis', 'geheim', 'schlüssel', 'schluessel', 'zugangsschlüssel',
-      // French
-      'motdepasse', 'mot_de_passe', 'motdepass', 'clé', 'clef', 'clésecrète', 'secret',
-      // Italian
-      'segreto', 'chiave', 'parolachiave', 'parola_chiave', 'credenziale',
-      // Dutch
-      'wachtwoord', 'geheim', 'sleutel',
-      // Polish
-      'hasło', 'haslo', 'tajne', 'klucz', 'poufne',
-      // Czech / Slovak
-      'heslo', 'tajný', 'tajne', 'klíč', 'klic',
-      // Romanian
-      'parolă', 'parola', 'secret', 'cheie',
-      // Swedish / Norwegian / Danish
-      'lösenord', 'losenord', 'passord', 'adgangskode', 'hemlig', 'nyckel',
-      // Greek
-      'κωδικός', 'μυστικό', 'κλειδί',
-      // Russian
-      'пароль', 'секрет', 'токен', 'ключ', 'секретныйключ',
-      // Ukrainian
-      'пароль', 'секрет', 'ключ', 'таємний',
-      // Turkish
-      'şifre', 'sifre', 'parola', 'gizli', 'anahtar', 'gizlianahtar',
-      // Azerbaijani
-      'şifrə', 'parol', 'gizli', 'açar', 'məxfi',
-      // Persian
-      'رمز', 'رمزعبور', 'گذرواژه', 'کلمهعبور', 'کلید', 'محرمانه',
-      // Arabic
-      'كلمةالمرور', 'كلمةالسر', 'سر', 'رمز', 'مفتاح', 'سري',
-      // Hebrew
-      'סיסמה', 'סוד', 'מפתח',
-      // Chinese
+      // 2. Chinese
       '密码', '密碼', '秘密', '令牌', '密钥', '私钥', '口令',
-      // Japanese
+      // 3. Hindi
+      'पासवर्ड', 'गुप्त', 'कुंजी', 'टोकन',
+      // 4. Spanish
+      'contraseña', 'contrasena', 'clave', 'secreto', 'credencial',
+      // 5. Arabic
+      'كلمةالمرور', 'كلمةالسر', 'سر', 'رمز', 'مفتاح', 'سري',
+      // 6. French
+      'motdepasse', 'mot_de_passe', 'motdepass', 'clé', 'clef', 'clésecrète', 'secret',
+      // 7. Portuguese
+      'senha', 'segredo', 'chavesecreta', 'chave',
+      // 8. Russian
+      'пароль', 'секрет', 'токен', 'ключ', 'секретныйключ',
+      // 9. Japanese
       'パスワード', '秘密', 'トークン', '暗証番号', '合言葉',
-      // Korean
+      // 10. German
+      'passwort', 'kennwort', 'geheimnis', 'geheim', 'schlüssel', 'schluessel', 'zugangsschlüssel',
+      // 11. Korean
       '비밀번호', '암호', '비밀', '토큰', '비밀키',
-      // Hindi
-      'पासवर्ड', 'गुप्त', 'कुंजी',
-      // Indonesian / Malay
-      'katasandi', 'kata_sandi', 'sandi', 'rahasia', 'rahsia', 'kunci',
-      // Vietnamese
+      // 12. Turkish
+      'şifre', 'sifre', 'parola', 'gizli', 'anahtar', 'gizlianahtar',
+      // 13. Italian
+      'segreto', 'chiave', 'parolachiave', 'parola_chiave', 'credenziale',
+      // 14. Persian
+      'رمز', 'رمزعبور', 'گذرواژه', 'کلمهعبور', 'کلید', 'محرمانه',
+      // 15. Polish
+      'hasło', 'haslo', 'tajne', 'klucz', 'poufne',
+      // 16. Ukrainian
+      'пароль', 'секрет', 'ключ', 'таємний',
+      // 17. Dutch
+      'wachtwoord', 'geheim', 'sleutel',
+      // 18. Vietnamese
       'matkhau', 'mat_khau', 'bimat', 'khoa',
-      // Thai
+      // 19. Indonesian
+      'katasandi', 'kata_sandi', 'sandi', 'rahasia', 'kunci',
+      // 20. Thai
       'รหัสผ่าน', 'ความลับ',
+      // 21. Greek
+      'κωδικός', 'μυστικό', 'κλειδί',
+      // 22. Hebrew
+      'סיסמה', 'סוד', 'מפתח',
+      // 23. Azerbaijani
+      'şifrə', 'parol', 'gizli', 'açar', 'məxfi',
+      // 24. Romanian
+      'parolă', 'parola', 'cheie',
     ].map((w) => w.toLowerCase()),
   ),
 );

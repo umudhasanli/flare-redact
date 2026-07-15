@@ -1,5 +1,6 @@
 import { assignmentPattern } from './i18n.js';
 import { LOCALE_DETECTORS } from './locales.js';
+import { EXTRA_DETECTORS } from './extra.js';
 
 export { SECRET_KEYWORDS, MULTILANG_KEY_SET } from './i18n.js';
 
@@ -301,4 +302,5 @@ export const DETECTORS: Detector[] = [
     tags: ['secret'],
   },
   ...LOCALE_DETECTORS,
+  ...EXTRA_DETECTORS,
 ];

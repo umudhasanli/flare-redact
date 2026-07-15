@@ -1,0 +1,180 @@
+import type { Detector } from './detectors.js';
+import { abaValid, nhsValid, vinValid } from './checksums.js';
+import { isMnemonic } from './bip39.js';
+
+const pre = (n: number) => (v: string): string => (v.length <= n ? '***' : v.slice(0, n) + '***');
+
+/**
+ * Extra detectors beyond the core: more third-party service secrets, crypto,
+ * finance, identity, and network data. Service secrets have distinctive prefixes
+ * (low false-positive rate) so they run by default; the rest are opt-in by tag.
+ */
+export const EXTRA_DETECTORS: Detector[] = [
+  // ── third-party service secrets (distinctive → on by default) ──────────────
+  {
+    id: 'digitalocean_token',
+    label: 'DigitalOcean token',
+    why: 'Controls DigitalOcean infrastructure and billing.',
+    pattern: /\bdop_v1_[a-f0-9]{64}\b/g,
+    mask: pre(7),
+    default: true,
+    tags: ['secret'],
+  },
+  {
+    id: 'sentry_dsn',
+    label: 'Sentry DSN',
+    why: 'A Sentry DSN can be used to send events to your project.',
+    pattern: /\bhttps:\/\/[0-9a-zA-Z]{16,}@[\w.-]*sentry\.io\/\d+\b/g,
+    mask: () => '[REDACTED SENTRY DSN]',
+    default: true,
+    tags: ['secret'],
+  },
+  {
+    id: 'new_relic_key',
+    label: 'New Relic key',
+    why: 'Grants access to your New Relic account data.',
+    pattern: /\b(?:NRAK-[A-Z0-9]{27}|NRJS-[a-f0-9]{19})\b/g,
+    mask: pre(5),
+    default: true,
+    tags: ['secret'],
+  },
+  {
+    id: 'discord_bot_token',
+    label: 'Discord bot token',
+    why: 'Full control of a Discord bot account.',
+    pattern: /\b[MNO][A-Za-z\d_-]{23}\.[A-Za-z\d_-]{6}\.[A-Za-z\d_-]{27,}\b/g,
+    mask: () => '[REDACTED DISCORD TOKEN]',
+    default: true,
+    tags: ['secret'],
+  },
+  {
+    id: 'telegram_bot_token',
+    label: 'Telegram bot token',
+    why: 'Full control of a Telegram bot.',
+    pattern: /\b\d{8,10}:[A-Za-z0-9_-]{34,46}\b/g,
+    mask: () => '[REDACTED TELEGRAM TOKEN]',
+    default: true,
+    tags: ['secret'],
+  },
+  {
+    id: 'shopify_token',
+    label: 'Shopify token',
+    why: 'Access to a Shopify store and its data.',
+    pattern: /\bshp(?:at|ca|pa|ss)_[a-fA-F0-9]{32}\b/g,
+    mask: pre(6),
+    default: true,
+    tags: ['secret'],
+  },
+  {
+    id: 'square_token',
+    label: 'Square token',
+    why: 'Can move money through a Square account.',
+    pattern: /\b(?:sq0[a-z]{3}-[A-Za-z0-9_-]{22,43}|EAAA[A-Za-z0-9_-]{60})\b/g,
+    mask: pre(6),
+    default: true,
+    tags: ['secret'],
+  },
+  {
+    id: 'azure_storage_key',
+    label: 'Azure storage key',
+    why: 'A storage account key grants full access to the account.',
+    pattern: /\bAccountKey=[A-Za-z0-9+/]{86}==/g,
+    mask: () => 'AccountKey=***',
+    default: true,
+    tags: ['secret'],
+  },
+
+  // ── crypto (opt-in) ────────────────────────────────────────────────────────
+  {
+    id: 'eth_address',
+    label: 'Ethereum address',
+    why: 'A wallet address — can identify a person and their holdings.',
+    pattern: /\b0x[a-fA-F0-9]{40}\b/g,
+    mask: pre(6),
+    default: false,
+    tags: ['crypto'],
+  },
+  {
+    id: 'btc_address',
+    label: 'Bitcoin address',
+    why: 'A wallet address — can identify a person and their holdings.',
+    pattern: /\b(?:bc1[a-z0-9]{25,62}|[13][a-km-zA-HJ-NP-Z1-9]{25,34})\b/g,
+    mask: pre(4),
+    default: false,
+    tags: ['crypto'],
+  },
+  {
+    id: 'seed_phrase',
+    label: 'Crypto seed phrase',
+    why: 'A BIP39 mnemonic recovers an entire wallet — the highest-value secret there is.',
+    pattern: /\b(?:[a-z]{3,8}\s+){11,23}[a-z]{3,8}\b/g,
+    validate: isMnemonic,
+    mask: () => '[REDACTED SEED PHRASE]',
+    default: false,
+    tags: ['crypto'],
+  },
+
+  // ── finance (opt-in, checksum-validated where possible) ─────────────────────
+  {
+    id: 'aba_routing',
+    label: 'US bank routing number',
+    why: 'An ABA routing number identifies a US bank account.',
+    pattern: /\b\d{9}\b/g,
+    validate: abaValid,
+    mask: () => '[REDACTED ROUTING]',
+    default: false,
+    tags: ['finance', 'us'],
+  },
+  {
+    id: 'swift_bic',
+    label: 'SWIFT / BIC code',
+    why: 'Identifies a bank for international transfers.',
+    pattern: /\b[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}(?:[A-Z0-9]{3})?\b/g,
+    mask: pre(4),
+    default: false,
+    tags: ['finance'],
+  },
+
+  // ── identity (opt-in, checksum-validated) ───────────────────────────────────
+  {
+    id: 'uk_nhs',
+    label: 'UK NHS number',
+    why: 'A UK National Health Service number — health PII.',
+    pattern: /\b\d{3}[ -]?\d{3}[ -]?\d{4}\b/g,
+    validate: nhsValid,
+    mask: () => '[REDACTED ID]',
+    default: false,
+    tags: ['pii', 'id', 'gb'],
+  },
+  {
+    id: 'vin',
+    label: 'Vehicle VIN',
+    why: 'A vehicle identification number can identify an owner.',
+    pattern: /\b[A-HJ-NPR-Z0-9]{17}\b/g,
+    validate: vinValid,
+    mask: () => '[REDACTED VIN]',
+    default: false,
+    tags: ['vehicle'],
+  },
+
+  // ── network (opt-in) ────────────────────────────────────────────────────────
+  {
+    id: 'coordinates',
+    label: 'Geographic coordinates',
+    why: 'Precise lat/long can reveal a person’s location.',
+    pattern: /\b-?\d{1,3}\.\d{4,},\s?-?\d{1,3}\.\d{4,}\b/g,
+    mask: () => '[REDACTED COORDS]',
+    default: false,
+    tags: ['network'],
+  },
+  {
+    id: 'internal_url',
+    label: 'Internal URL',
+    why: 'Localhost and private-range URLs expose internal infrastructure.',
+    pattern:
+      /\bhttps?:\/\/(?:localhost|127\.0\.0\.1|(?:10|192\.168|172\.(?:1[6-9]|2\d|3[01]))\.[\d.]+)(?::\d+)?[^\s]*/g,
+    mask: () => '[REDACTED INTERNAL URL]',
+    default: false,
+    tags: ['network'],
+  },
+];
