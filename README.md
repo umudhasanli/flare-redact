@@ -51,10 +51,7 @@ Nothing to configure. No list of field paths to maintain. No native build step.
 > [Jump to it ↓](#redact-prompts-before-they-reach-an-llm)
 
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/coverage-dark.svg">
-    <img src="assets/coverage-light.svg" alt="One policy applied across app, logs, HTTP, LLM, datasets, and egress" width="820">
-  </picture>
+  <img src="assets/demo.svg" alt="Before and after — secrets and PII masked in a log line, across languages" width="820">
 </p>
 
 |   |   |   |
@@ -401,9 +398,20 @@ Plus object values whose **key name** is sensitive (`password`, `token`,
 ## Every language, every country
 
 Secrets like API keys and card numbers don't care what language your app is in.
-Neither does this — but the word-based checks do, so `password`, `secret`, and
-`token` are recognized in **24 languages** (`şifrə=…`, `密码: …`, `пароль=…`,
-`contraseña: …`), as assignments and as object keys.
+Neither does this — but the word-based checks do, so words like *password*,
+*secret*, and *token* are recognized as assignments and as object keys in all
+**24 languages** below:
+
+| | | |
+|---|---|---|
+| 🇬🇧 English `password` | 🇨🇳 Chinese `密码` | 🇮🇳 Hindi `पासवर्ड` |
+| 🇪🇸 Spanish `contraseña` | 🇸🇦 Arabic `كلمة المرور` | 🇫🇷 French `mot de passe` |
+| 🇵🇹 Portuguese `senha` | 🇷🇺 Russian `пароль` | 🇯🇵 Japanese `パスワード` |
+| 🇩🇪 German `passwort` | 🇰🇷 Korean `비밀번호` | 🇹🇷 Turkish `şifre` |
+| 🇮🇹 Italian `segreto` | 🇮🇷 Persian `رمز عبور` | 🇵🇱 Polish `hasło` |
+| 🇺🇦 Ukrainian `пароль` | 🇳🇱 Dutch `wachtwoord` | 🇻🇳 Vietnamese `mật khẩu` |
+| 🇮🇩 Indonesian `kata sandi` | 🇹🇭 Thai `รหัสผ่าน` | 🇬🇷 Greek `κωδικός` |
+| 🇮🇱 Hebrew `סיסמה` | 🇦🇿 Azerbaijani `şifrə` | 🇷🇴 Romanian `parolă` |
 
 National IDs are opt-in and **checksum-validated**, so a random run of digits is
 never mistaken for one. Enable a whole group or a single country by tag:

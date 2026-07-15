@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 384" width="860" height="384" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace">
+  <rect x="6" y="6" width="848" height="372" rx="16" fill="#0d1117" stroke="#ffffff" stroke-opacity="0.09"/>
+
+  <circle cx="32" cy="36" r="6" fill="#ff5f56"/>
+  <circle cx="54" cy="36" r="6" fill="#ffbd2e"/>
+  <circle cx="76" cy="36" r="6" fill="#27c93f"/>
+  <text x="102" y="41" font-size="13.5" fill="#a5b4fc" font-weight="600">flare-redact</text>
+  <text x="828" y="41" font-size="12" fill="#6e7681" text-anchor="end">redact()</text>
+  <line x1="6" y1="60" x2="854" y2="60" stroke="#ffffff" stroke-opacity="0.07"/>
+
+  <circle cx="36" cy="86" r="4" fill="#ff7b72"/>
+  <text x="48" y="90" font-size="11" letter-spacing="1.5" fill="#ff7b72">BEFORE — YOUR LOGS</text>
+
+  <g font-size="13" xml:space="preserve">
+    <text x="30" y="120"><tspan fill="#6e7681">14:02  checkout   user=</tspan><tspan fill="#ff7b72">alice@corp.com</tspan><tspan fill="#6e7681">   card=</tspan><tspan fill="#ff7b72">4242 4242 4242 4242</tspan></text>
+    <text x="30" y="148"><tspan fill="#6e7681">14:02  auth       Authorization: Bearer </tspan><tspan fill="#ff7b72">ghp_R2v8KxNq7t3Zp1…</tspan></text>
+    <text x="30" y="176"><tspan fill="#6e7681">14:03  worker     </tspan><tspan fill="#e3b341">密码</tspan><tspan fill="#6e7681">: </tspan><tspan fill="#ff7b72">s3cr3tPass</tspan><tspan fill="#6e7681">   iban=</tspan><tspan fill="#ff7b72">GB82 WEST 1234 5698 7654 32</tspan></text>
+  </g>
+
+  <line x1="30" y1="200" x2="830" y2="200" stroke="#ffffff" stroke-opacity="0.07" stroke-dasharray="2 4"/>
+
+  <circle cx="36" cy="226" r="4" fill="#3fb950"/>
+  <text x="48" y="230" font-size="11" letter-spacing="1.5" fill="#3fb950">AFTER — SAFE TO SHIP</text>
+
+  <g font-size="13" xml:space="preserve">
+    <text x="30" y="260"><tspan fill="#6e7681">14:02  checkout   user=</tspan><tspan fill="#3fb950">a***@***</tspan><tspan fill="#6e7681">   card=</tspan><tspan fill="#3fb950">**** **** **** 4242</tspan></text>
+    <text x="30" y="288"><tspan fill="#6e7681">14:02  auth       Authorization: Bearer </tspan><tspan fill="#3fb950">***</tspan></text>
+    <text x="30" y="316"><tspan fill="#6e7681">14:03  worker     </tspan><tspan fill="#e3b341">密码</tspan><tspan fill="#6e7681">: </tspan><tspan fill="#3fb950">***</tspan><tspan fill="#6e7681">   iban=</tspan><tspan fill="#3fb950">[REDACTED IBAN]</tspan></text>
+  </g>
+
+  <line x1="6" y1="340" x2="854" y2="340" stroke="#ffffff" stroke-opacity="0.07"/>
+  <text x="30" y="364" font-size="12.5"><tspan fill="#818cf8">$ npm i</tspan><tspan fill="#c9d1d9"> flare-redact</tspan></text>
+  <text x="828" y="364" font-size="11.5" fill="#6e7681" text-anchor="end">zero-dependency · 24 languages · one line</text>
+</svg>
