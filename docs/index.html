@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>flare-redact — redact secrets &amp; PII from logs, prompts &amp; text (JS/TS)</title>
+  <meta name="description" content="flare-redact is a zero-dependency JavaScript & TypeScript library to redact and mask secrets and PII — API keys, tokens, JWTs, credit cards, emails, national IDs — from logs, LLM prompts, HTTP, and datasets. Reversible, 24 languages, ReDoS-safe.">
+  <meta name="keywords" content="redact, redaction, pii redaction, data masking, mask pii, mask secrets, secret detection, secret scanning, javascript, typescript, nodejs, llm, openai, anonymization, gdpr, pci, zero dependency">
+  <link rel="canonical" href="https://umudhasanli.github.io/flare-redact/">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="flare-redact — redact secrets & PII in JavaScript/TypeScript">
+  <meta property="og:description" content="Zero-dependency redaction for logs, LLM prompts, HTTP and datasets. Reversible, 24 languages, ReDoS-safe.">
+  <meta property="og:url" content="https://umudhasanli.github.io/flare-redact/">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="flare-redact — redact secrets & PII in JavaScript/TypeScript">
+  <meta name="twitter:description" content="Paste any text and watch secrets & PII disappear. Zero deps, reversible, 24 languages.">
+  <style>
+    :root {
+      --bg: #0b0e14; --panel: #11151f; --panel2: #0d111a; --line: rgba(255,255,255,.09);
+      --ink: #e6e9f0; --dim: #8b93a5; --faint: #6b7280;
+      --indigo: #818cf8; --indigo2: #a5b4fc; --indigo-d: #4f46e5;
+      --red: #ff7b72; --green: #3fb950; --amber: #e3b341;
+      --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+      --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+    a { color: var(--indigo2); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .wrap { max-width: 960px; margin: 0 auto; padding: 0 20px; }
+    header { padding: 64px 0 28px; text-align: center; }
+    .brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 700; font-size: 15px; color: var(--indigo2); letter-spacing: -.01em; }
+    .spark { width: 22px; height: 22px; }
+    h1 { font-size: clamp(30px, 6vw, 46px); line-height: 1.08; letter-spacing: -.03em; margin: 22px 0 14px; text-wrap: balance; }
+    h1 .g { color: var(--indigo2); }
+    .sub { color: var(--dim); font-size: clamp(15px, 2.4vw, 18px); max-width: 46ch; margin: 0 auto; line-height: 1.5; }
+    .cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin: 26px 0 8px; }
+    .install { font-family: var(--mono); font-size: 14px; background: #05070b; border: 1px solid var(--line); border-radius: 10px; padding: 11px 16px; color: var(--ink); }
+    .install .p { color: var(--indigo); }
+    .btn { display: inline-flex; align-items: center; padding: 11px 18px; border-radius: 10px; font-weight: 600; font-size: 14px; }
+    .btn.primary { background: var(--indigo-d); color: #fff; }
+    .btn.ghost { border: 1px solid var(--line); color: var(--ink); }
+    .badges { margin-top: 20px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+    .badge { font-size: 12px; color: var(--dim); border: 1px solid var(--line); border-radius: 999px; padding: 5px 11px; }
+
+    section { padding: 30px 0; }
+    .eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--indigo); }
+    h2 { font-size: 24px; letter-spacing: -.02em; margin: 8px 0 18px; }
+
+    .pg { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+    .pg-bar { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+    .dot { width: 11px; height: 11px; border-radius: 50%; }
+    .pg-controls { display: flex; gap: 14px; flex-wrap: wrap; padding: 14px 16px; border-bottom: 1px solid var(--line); font-size: 13px; color: var(--dim); align-items: center; }
+    .pg-controls label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+    select { background: var(--panel2); color: var(--ink); border: 1px solid var(--line); border-radius: 7px; padding: 5px 8px; font-family: var(--mono); font-size: 12.5px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; }
+    @media (max-width: 720px) { .grid { grid-template-columns: 1fr; } }
+    .cell { padding: 16px; }
+    .cell + .cell { border-left: 1px solid var(--line); }
+    @media (max-width: 720px) { .cell + .cell { border-left: none; border-top: 1px solid var(--line); } }
+    .cell h3 { font-family: var(--mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--faint); margin: 0 0 10px; }
+    textarea { width: 100%; min-height: 150px; resize: vertical; background: var(--panel2); color: var(--ink); border: 1px solid var(--line); border-radius: 10px; padding: 12px; font-family: var(--mono); font-size: 13px; line-height: 1.6; }
+    pre.out { margin: 0; min-height: 150px; background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 12px; font-family: var(--mono); font-size: 13px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; color: var(--ink); overflow: auto; }
+    pre.out .m { color: var(--green); font-weight: 600; }
+    .findings { padding: 14px 16px; border-top: 1px solid var(--line); font-size: 13px; color: var(--dim); }
+    .finding { display: flex; gap: 8px; padding: 4px 0; }
+    .finding .tag { color: var(--indigo2); font-family: var(--mono); font-size: 12px; }
+    .clean { color: var(--green); }
+
+    .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+    @media (max-width: 720px) { .features { grid-template-columns: 1fr; } }
+    .feat { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+    .feat h3 { margin: 0 0 6px; font-size: 15px; }
+    .feat p { margin: 0; color: var(--dim); font-size: 13.5px; line-height: 1.5; }
+    footer { padding: 40px 0 60px; text-align: center; color: var(--faint); font-size: 13px; border-top: 1px solid var(--line); margin-top: 20px; }
+    code.k { font-family: var(--mono); color: var(--indigo2); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="brand">
+        <svg class="spark" viewBox="0 0 34 34" fill="none" aria-hidden="true">
+          <path d="M2 17 C8 8, 26 8, 32 17 C26 26, 8 26, 2 17 Z" stroke="#818cf8" stroke-width="2" fill="rgba(129,140,248,0.08)"/>
+          <circle cx="17" cy="17" r="6.4" stroke="#a5b4fc" stroke-width="2"/>
+          <circle cx="17" cy="17" r="2.4" fill="#818cf8"/>
+        </svg>
+        flare-redact
+      </div>
+      <h1>Redact secrets &amp; PII <span class="g">before they leak</span></h1>
+      <p class="sub">A zero-dependency JavaScript &amp; TypeScript library that masks API keys, tokens, credit cards, emails and national IDs in logs, LLM prompts, HTTP and datasets — reversibly, in 24 languages.</p>
+      <div class="cta">
+        <span class="install"><span class="p">npm</span> i flare-redact</span>
+        <a class="btn primary" href="https://github.com/umudhasanli/flare-redact">GitHub ★</a>
+        <a class="btn ghost" href="https://www.npmjs.com/package/flare-redact">npm</a>
+      </div>
+      <div class="badges">
+        <span class="badge">0 dependencies</span>
+        <span class="badge">24 languages</span>
+        <span class="badge">reversible</span>
+        <span class="badge">ReDoS-safe</span>
+        <span class="badge">Node · browser · edge</span>
+      </div>
+    </header>
+
+    <section>
+      <div class="eyebrow">Live playground</div>
+      <h2>Paste anything — watch the secrets disappear</h2>
+      <div class="pg">
+        <div class="pg-bar">
+          <span class="dot" style="background:#ff5f56"></span>
+          <span class="dot" style="background:#ffbd2e"></span>
+          <span class="dot" style="background:#27c93f"></span>
+        </div>
+        <div class="pg-controls">
+          <span>mode</span>
+          <select id="mode">
+            <option value="mask">mask</option>
+            <option value="label">label</option>
+            <option value="hash">hash</option>
+            <option value="fpe">fpe (format-preserving)</option>
+          </select>
+          <label><input type="checkbox" id="pii" checked> national IDs / crypto (opt-in)</label>
+          <span id="status" style="margin-left:auto;color:var(--faint)"></span>
+        </div>
+        <div class="grid">
+          <div class="cell">
+            <h3>Input</h3>
+            <textarea id="in" spellcheck="false"></textarea>
+          </div>
+          <div class="cell">
+            <h3>Redacted</h3>
+            <pre class="out" id="out"></pre>
+          </div>
+        </div>
+        <div class="findings" id="findings"></div>
+      </div>
+    </section>
+
+    <section>
+      <div class="eyebrow">Why flare-redact</div>
+      <h2>One redaction layer for everywhere</h2>
+      <div class="features">
+        <div class="feat"><h3>🔍 Content-aware</h3><p>Reads the values, not just field names — it catches the key pasted into a free-text note or a stack trace.</p></div>
+        <div class="feat"><h3>♻️ Reversible</h3><p>A vault swaps secrets for placeholders and restores them — send a redacted prompt to an LLM, then restore the reply.</p></div>
+        <div class="feat"><h3>🤖 LLM-safe</h3><p><code class="k">wrapOpenAI</code>, <code class="k">wrapAnthropic</code>, and <code class="k">createSession</code> keep private data out of your model calls.</p></div>
+        <div class="feat"><h3>🌍 24 languages</h3><p>Password/secret/token keywords in 24 languages, plus checksum-validated national IDs and IBAN.</p></div>
+        <div class="feat"><h3>🧩 Everywhere</h3><p>pino, winston, HTTP middleware, streams, CSV datasets, a fetch egress guard — one policy across them all.</p></div>
+        <div class="feat"><h3>🛡️ ReDoS-safe · 0 deps</h3><p>Bounded, linear-time patterns you can point at untrusted input. Nothing to install, runs anywhere JS runs.</p></div>
+      </div>
+    </section>
+
+    <footer>
+      <p>Open source (MIT) · <a href="https://github.com/umudhasanli/flare-redact">github.com/umudhasanli/flare-redact</a> · <a href="https://www.npmjs.com/package/flare-redact">npm</a></p>
+      <p>Redact PII &amp; secrets from logs, LLM prompts and datasets in JavaScript and TypeScript.</p>
+    </footer>
+  </div>
+
+  <script type="module">
+    const SAMPLE = `User alice@corp.com paid with 4242 4242 4242 4242
+Authorization: Bearer ghp_R2v8KxNq7t3Zp1QwErTyUiOpAsDfGhJkLzXc
+db=postgres://admin:s3cr3tPass@10.2.0.4/prod
+密码: hunter2   iban=GB82WEST12345698765432
+wallet 0x742d35Cc6634C0532925a3b844Bc454e4438f44e`;
+
+    const $ = (id) => document.getElementById(id);
+    $('in').value = SAMPLE;
+    const status = $('status');
+    status.textContent = 'loading…';
+
+    let redact, scan;
+    try {
+      const mod = await import('https://esm.sh/flare-redact@0.7.0');
+      redact = mod.redact; scan = mod.scan;
+      status.textContent = 'ready';
+    } catch (e) {
+      status.textContent = 'failed to load library';
+      $('out').textContent = 'Could not load flare-redact from the CDN.';
+    }
+
+    const esc = (s) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+
+    function run() {
+      if (!redact) return;
+      const text = $('in').value;
+      const opts = { mode: $('mode').value };
+      if ($('pii').checked) opts.enable = ['pii', 'crypto', 'network'];
+      let out = '';
+      try { out = redact(text, opts); } catch (e) { out = String(e); }
+      // highlight the masks (***, [REDACTED...], placeholders)
+      const html = esc(out).replace(/(\*\*\*|\[[A-Z][A-Z _]*\]|[a-z_]+_[0-9a-f]{8}|\[CUSTOM_TERM_\d+\])/g, '<span class="m">$1</span>');
+      $('out').innerHTML = html;
+
+      const findings = scan(text, opts);
+      const f = $('findings');
+      if (!findings.length) { f.innerHTML = '<span class="clean">✓ nothing sensitive found</span>'; return; }
+      const seen = new Map();
+      for (const x of findings) seen.set(x.detector, (seen.get(x.detector) || 0) + 1);
+      f.innerHTML = '<b>' + findings.length + ' found:</b> ' +
+        [...seen].map(([d, n]) => `<span class="tag">${d}${n > 1 ? '×' + n : ''}</span>`).join(' &nbsp; ');
+    }
+
+    $('in').addEventListener('input', run);
+    $('mode').addEventListener('change', run);
+    $('pii').addEventListener('change', run);
+    run();
+  </script>
+</body>
+</html>
