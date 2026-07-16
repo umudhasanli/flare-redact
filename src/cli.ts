@@ -1,8 +1,8 @@
-import { readFileSync } from 'node:fs';
-import { redact, scan, summary, DETECTORS, type Mode, type RedactOptions, type Finding } from './index.js';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { redact, scan, summary, createVault, restore, DETECTORS, type Mode, type RedactOptions, type Finding } from './index.js';
 import { redactCsv } from './csv.js';
 
-const VERSION = '0.6.2';
+const VERSION = '0.7.0';
 
 const HELP = `flare-redact — hide secrets & PII before they hit a log
 
@@ -21,6 +21,10 @@ OPTIONS
   --disable <ids>   turn off detectors (e.g. email)
   --mask <str>      replace every secret with this string
   --allow <vals>    never redact these exact values (comma-separated)
+  --term <word>     also catch this exact word/phrase (repeatable)
+  --terms <file>    also catch every word/phrase in this file (one per line)
+  --vault <file>    reversible: mask with placeholders, write the map to <file>
+  --restore <file>  put originals back using a map written by --vault
   --list            show all detectors and exit
   -h, --help        show this help
   -v, --version     show version
@@ -42,6 +46,8 @@ interface ParsedArgs {
   showHelp: boolean;
   showVersion: boolean;
   listMode: boolean;
+  vaultFile?: string;
+  restoreFile?: string;
 }
 
 function csv(s: string | undefined): string[] {
@@ -58,6 +64,9 @@ function parseArgs(argv: string[]): ParsedArgs {
   let showHelp = false;
   let showVersion = false;
   let listMode = false;
+  let vaultFile: string | undefined;
+  let restoreFile: string | undefined;
+  const terms: string[] = [];
 
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]!;
@@ -76,12 +85,21 @@ function parseArgs(argv: string[]): ParsedArgs {
       case '--mask': opts.mask = argv[++i]; break;
       case '--mode': opts.mode = argv[++i] as Mode; break;
       case '--hash-salt': opts.hashSalt = argv[++i]; break;
+      case '--term': { const w = argv[++i]; if (w) terms.push(w); break; }
+      case '--terms': {
+        const lines = readFileSync(argv[++i]!, 'utf8').split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+        terms.push(...lines);
+        break;
+      }
+      case '--vault': vaultFile = argv[++i]; break;
+      case '--restore': restoreFile = argv[++i]; break;
       default:
         if (a.startsWith('-')) throw new Error(`unknown option: ${a}`);
         files.push(a);
     }
   }
-  return { opts, files, scanMode, summaryMode, jsonMode, csvMode, showHelp, showVersion, listMode };
+  if (terms.length) opts.terms = terms;
+  return { opts, files, scanMode, summaryMode, jsonMode, csvMode, showHelp, showVersion, listMode, vaultFile, restoreFile };
 }
 
 function readStdin(): string {
@@ -110,7 +128,7 @@ export function main(argv: string[]): number {
     process.stderr.write(`${(e as Error).message}\n\n${HELP}`);
     return 2;
   }
-  const { opts, files, scanMode, summaryMode, jsonMode, csvMode, showHelp, showVersion, listMode } = parsed;
+  const { opts, files, scanMode, summaryMode, jsonMode, csvMode, showHelp, showVersion, listMode, vaultFile, restoreFile } = parsed;
 
   if (showHelp) { process.stdout.write(HELP); return 0; }
   if (showVersion) { process.stdout.write(`${VERSION}\n`); return 0; }
@@ -124,6 +142,22 @@ export function main(argv: string[]): number {
   const raw = files.length ? files.map((f) => readFileSync(f, 'utf8')).join('\n') : readStdin();
   const data: unknown = jsonMode ? tryParse(raw) : raw;
   if (jsonMode && data === PARSE_ERROR) return 2;
+
+  const emit = (out: unknown) =>
+    process.stdout.write(jsonMode ? JSON.stringify(out, null, 2) + '\n' : String(out));
+
+  if (restoreFile) {
+    emit(restore(data, JSON.parse(readFileSync(restoreFile, 'utf8'))));
+    return 0;
+  }
+
+  if (vaultFile) {
+    const vault = createVault(opts);
+    const out = vault.redact(data);
+    writeFileSync(vaultFile, JSON.stringify(Object.fromEntries(vault.entries()), null, 2));
+    emit(out);
+    return 0;
+  }
 
   if (summaryMode) {
     const s = summary(data, opts);

@@ -1,5 +1,6 @@
 import { DETECTORS, fnv1a, fpe, SENSITIVE_KEY_RE, type Detector } from './detectors.js';
 import { MULTILANG_KEY_SET } from './i18n.js';
+import { buildTermsDetector, type TermSpec } from './terms.js';
 
 export type Mode = 'mask' | 'label' | 'hash' | 'fpe';
 
@@ -23,6 +24,10 @@ export interface RedactOptions {
   hashSalt?: string;
   redactKeys?: boolean | RegExp | string[];
   allow?: RegExp | string[];
+  /** Your own words/phrases to always catch — masked one-way, or reversible in a vault. */
+  terms?: TermSpec[] | Record<string, string>;
+  /** Match `terms` case-sensitively (default: false). */
+  termsCaseSensitive?: boolean;
 }
 
 export interface Hit extends Finding {
@@ -37,15 +42,19 @@ function matches(entry: string, d: Detector): boolean {
 
 export function resolveDetectors(opts: RedactOptions): Detector[] {
   const all = opts.custom?.length ? [...DETECTORS, ...opts.custom] : DETECTORS;
+  let chosen: Detector[];
   if (opts.only?.length) {
-    return all.filter((d) => opts.only!.some((e) => matches(e, d)));
+    chosen = all.filter((d) => opts.only!.some((e) => matches(e, d)));
+  } else {
+    const { enable, disable } = opts;
+    chosen = all.filter((d) => {
+      const on = d.default || (enable?.some((e) => matches(e, d)) ?? false);
+      const off = disable?.some((e) => matches(e, d)) ?? false;
+      return on && !off;
+    });
   }
-  const { enable, disable } = opts;
-  return all.filter((d) => {
-    const on = d.default || (enable?.some((e) => matches(e, d)) ?? false);
-    const off = disable?.some((e) => matches(e, d)) ?? false;
-    return on && !off;
-  });
+  const termsDet = buildTermsDetector(opts.terms, opts.termsCaseSensitive);
+  return termsDet ? [termsDet, ...chosen] : chosen;
 }
 
 export function keyMatcher(opts: RedactOptions): (key: string) => boolean {

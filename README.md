@@ -67,6 +67,7 @@ Nothing to configure. No list of field paths to maintain. No native build step.
 - [Ways to hide a value](#ways-to-hide-a-value)
 - [Reversible redaction](#reversible-redaction)
 - [Build a private chat app](#build-a-private-chat-app)
+- [Your own words](#your-own-words)
 - [See what leaks, and why](#see-what-leaks-and-why)
 - [Guard your logger in one line](#guard-your-logger-in-one-line)
 - [One policy, everywhere](#one-policy-everywhere)
@@ -222,6 +223,36 @@ process(out.flush());
 `session.redactMessages([{ role, content }])` masks a whole chat array at once,
 and `session.reset()` starts a fresh conversation. The model never sees the real
 data; your app still works end to end.
+
+## Your own words
+
+Detectors can't know your product codenames, project names, or internal jargon —
+so hand them a list. `terms` catches exactly the words you name (any language,
+longest match first, word-boundary safe), one-way or reversibly.
+
+```js
+// one-way, with your own replacement text
+redact('Launch Project Zeus with Falcon', {
+  terms: { 'Project Zeus': '[CLASSIFIED]', 'Falcon': '[CLASSIFIED]' },
+});
+// → 'Launch [CLASSIFIED] with [CLASSIFIED]'
+
+// reversible — send to a model, get it back
+const vault = createVault({ terms: ['Project Zeus'] });
+const safe = vault.redact('ship Project Zeus');   // 'ship [CUSTOM_TERM_1]'
+vault.restore(safe);                               // 'ship Project Zeus'
+```
+
+The same works from the CLI, including a full round-trip — mask, send the safe
+text anywhere, then restore what comes back:
+
+```bash
+# add words inline or from a file, and write the mapping to a vault file
+flare-redact --term "Project Zeus" --terms codenames.txt --vault map.json < in > safe
+
+# later, restore the originals from that map
+flare-redact --restore map.json < safe > original
+```
 
 ## See what leaks, and why
 
@@ -527,7 +558,10 @@ redactStream(opts?): Transform                  // line-wise stream redaction
 //   mode?: 'mask' | 'label' | 'hash' | 'fpe', hashSalt?, mask?,
 //   redactKeys?: boolean | RegExp | string[],
 //   allow?: RegExp | string[],
+//   terms?: string[] | { term: replacement }, termsCaseSensitive?,
 // }
+
+createSession(opts?)      // chat/AI apps: redact in, restore out, streaming, reset
 ```
 
 ## Why not a field allowlist?
