@@ -90,8 +90,8 @@ Nothing to configure. No list of field paths to maintain. No native build step.
 npm install flare-redact
 ```
 
-Node 18+, and it runs in the browser and edge runtimes too — zero dependencies.
-Upgrading from 0.8? Read the [`0.9 migration notes`](CHANGELOG.md#090--unreleased)
+Node 20+, and it runs in the browser and edge runtimes too — zero dependencies.
+Upgrading from 0.8? Read the [`0.9 migration notes`](CHANGELOG.md#090--2026-07-23)
 before changing protected transform or vault behavior.
 
 ## Redact anything

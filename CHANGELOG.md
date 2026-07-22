@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.9.0 — unreleased
+## 0.9.0 — 2026-07-23
 
 ### Security
 
@@ -30,6 +30,8 @@
 
 ### Migration
 
+- Upgrade Node.js to version 20 or newer. Opaque vault placeholders and encrypted
+  vault persistence rely on the stable Web Crypto API.
 - Set `transformSecret` in code, or `FLARE_REDACT_SECRET` for the CLI, when using
   deterministic protected modes.
 - Set `FLARE_REDACT_VAULT_PASSWORD` before CLI `--vault` or `--restore`.

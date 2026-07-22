@@ -145,7 +145,7 @@
     "url": "https://github.com/umudhasanli/flare-redact/issues"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
