@@ -256,9 +256,9 @@ flare-redact --restore map.json < safe > original
 
 ## See what leaks, and why
 
-`scan()` finds secrets without changing the input, and explains every hit in
-plain English — handy for alerts, dashboards, and understanding *why* something
-matched.
+`scan()` finds secrets without changing the input, explains every hit in plain
+English, and reports one-based line/column locations — handy for alerts,
+dashboards, and understanding *why* something matched.
 
 ```js
 import { scan } from 'flare-redact';
@@ -395,10 +395,16 @@ const fetch = wrapFetch(globalThis.fetch, { hosts: ['api.segment.io', 'telemetry
 ## Fail a build when a secret sneaks in
 
 `scan` from code, or `--scan` from the CLI (which exits non-zero on a hit) — drop
-it into CI or a pre-commit hook:
+it into CI or a pre-commit hook. File scans report `file:line:column`, while
+machine-readable JSON and SARIF reports never echo the matched secret value:
 
 ```yaml
 - run: git ls-files '*.env*' '*.log' '*.json' | xargs npx flare-redact --scan
+```
+
+```bash
+flare-redact --scan --format json .env app.log > flare-redact.json
+flare-redact --sarif .env app.log > flare-redact.sarif
 ```
 
 ## CLI
@@ -412,6 +418,8 @@ tail -f app.log | flare-redact               # stream redacted logs
 flare-redact --json --mode hash < event.json # deep-redact a JSON payload
 flare-redact --csv --mode fpe < dump.csv     # anonymize a dataset for staging
 flare-redact --scan config.env               # list findings + why (exit 1 if any)
+flare-redact --scan --format json .env app.log # safe machine-readable report
+flare-redact --sarif .env > results.sarif    # GitHub code-scanning report
 flare-redact --summary --json < event.json   # counts per detector
 flare-redact --enable high_entropy < app.log # also catch unknown-format keys
 flare-redact --list                          # show every detector

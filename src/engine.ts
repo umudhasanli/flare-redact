@@ -11,6 +11,10 @@ export interface Finding {
   value: string;
   start?: number;
   end?: number;
+  /** One-based line within the scanned string. */
+  line?: number;
+  /** One-based UTF-16 column within the scanned string. */
+  column?: number;
   path?: string;
 }
 

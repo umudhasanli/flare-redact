@@ -64,6 +64,13 @@ test('scan reports findings with a why, input unchanged', () => {
   for (const f of findings) assert.ok(f.why.length > 0);
 });
 
+test('scan reports one-based line and column locations', () => {
+  const [finding] = scan('safe line\ncontact bob@x.io now', { only: ['email'] });
+  assert.equal(finding.line, 2);
+  assert.equal(finding.column, 9);
+  assert.equal(finding.start, 18);
+});
+
 test('scan on objects returns json paths', () => {
   const findings = scan({ a: { b: gh }, password: 'x' });
   const paths = findings.map((f) => f.path);

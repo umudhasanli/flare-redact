@@ -59,14 +59,15 @@ export function scan(input: unknown, opts: RedactOptions = {}): Finding[] {
   const matchKey = keyMatcher(opts);
   const out: Finding[] = [];
 
-  const push = (h: Hit, path?: string) => {
+  const push = (h: Hit, text: string, path?: string) => {
     const { det: _det, ...f } = h;
-    out.push(path ? { ...f, path } : f);
+    const location = offsetLocation(text, h.start ?? 0);
+    out.push(path ? { ...f, ...location, path } : { ...f, ...location });
   };
 
   const walk = (value: unknown, path: string): void => {
     if (typeof value === 'string') {
-      for (const h of scanString(value, dets, allow)) push(h, path || undefined);
+      for (const h of scanString(value, dets, allow)) push(h, value, path || undefined);
     } else if (Array.isArray(value)) {
       value.forEach((v, i) => walk(v, `${path}[${i}]`));
     } else if (value && typeof value === 'object') {
@@ -89,6 +90,18 @@ export function scan(input: unknown, opts: RedactOptions = {}): Finding[] {
 
   walk(input, '');
   return out;
+}
+
+function offsetLocation(text: string, offset: number): { line: number; column: number } {
+  let line = 1;
+  let lineStart = 0;
+  for (let i = 0; i < offset; i++) {
+    if (text.charCodeAt(i) === 10) {
+      line++;
+      lineStart = i + 1;
+    }
+  }
+  return { line, column: offset - lineStart + 1 };
 }
 
 export function isClean(input: unknown, opts: RedactOptions = {}): boolean {

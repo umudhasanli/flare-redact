@@ -2,7 +2,8 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { redact, scan, summary, createVault, restore, DETECTORS, type Mode, type RedactOptions, type Finding } from './index.js';
 import { redactCsv } from './csv.js';
 
-const VERSION = '0.7.0';
+const VERSION = '0.8.0';
+type ScanFormat = 'pretty' | 'json' | 'sarif';
 
 const HELP = `flare-redact — hide secrets & PII before they hit a log
 
@@ -11,6 +12,8 @@ USAGE
 
 OPTIONS
   --scan            list what would be redacted, and why (input unchanged)
+  --format <f>      scan output: pretty | json | sarif (default: pretty)
+  --sarif           shorthand for --scan --format sarif
   --summary         print a count of findings per detector
   --json            parse input as JSON and redact recursively
   --csv             parse input as CSV and redact every cell
@@ -32,6 +35,8 @@ OPTIONS
 EXAMPLES
   tail -f app.log | flare-redact
   flare-redact --scan config.env
+  flare-redact --scan --format json .env app.log
+  flare-redact --sarif .env > flare-redact.sarif
   flare-redact --json --mode hash < event.json
   flare-redact --enable high_entropy,ipv4 < app.log
 `;
@@ -40,6 +45,7 @@ interface ParsedArgs {
   opts: RedactOptions;
   files: string[];
   scanMode: boolean;
+  scanFormat: ScanFormat;
   summaryMode: boolean;
   jsonMode: boolean;
   csvMode: boolean;
@@ -58,6 +64,7 @@ function parseArgs(argv: string[]): ParsedArgs {
   const opts: RedactOptions = {};
   const files: string[] = [];
   let scanMode = false;
+  let scanFormat: ScanFormat = 'pretty';
   let summaryMode = false;
   let jsonMode = false;
   let csvMode = false;
@@ -72,6 +79,8 @@ function parseArgs(argv: string[]): ParsedArgs {
     const a = argv[i]!;
     switch (a) {
       case '--scan': scanMode = true; break;
+      case '--format': scanFormat = parseScanFormat(argv[++i]); break;
+      case '--sarif': scanMode = true; scanFormat = 'sarif'; break;
       case '--summary': summaryMode = true; break;
       case '--json': jsonMode = true; break;
       case '--csv': csvMode = true; break;
@@ -99,7 +108,12 @@ function parseArgs(argv: string[]): ParsedArgs {
     }
   }
   if (terms.length) opts.terms = terms;
-  return { opts, files, scanMode, summaryMode, jsonMode, csvMode, showHelp, showVersion, listMode, vaultFile, restoreFile };
+  return { opts, files, scanMode, scanFormat, summaryMode, jsonMode, csvMode, showHelp, showVersion, listMode, vaultFile, restoreFile };
+}
+
+function parseScanFormat(value: string | undefined): ScanFormat {
+  if (value === 'pretty' || value === 'json' || value === 'sarif') return value;
+  throw new Error(`invalid scan format: ${value ?? '(missing)'} (expected pretty, json, or sarif)`);
 }
 
 function readStdin(): string {
@@ -110,14 +124,97 @@ function readStdin(): string {
   }
 }
 
-function formatFindings(findings: Finding[]): string {
+interface LocatedFinding extends Finding {
+  file?: string;
+}
+
+type ReportFinding = Omit<LocatedFinding, 'value'>;
+
+function reportFinding({ value: _value, ...finding }: LocatedFinding): ReportFinding {
+  return finding;
+}
+
+function findingLocation(f: LocatedFinding): string {
+  if (f.file && f.line !== undefined) return `${f.file}:${f.line}:${f.column ?? 1}`;
+  if (f.file && f.path) return `${f.file} @ ${f.path}`;
+  if (f.file) return f.file;
+  if (f.path) return f.path;
+  if (f.line !== undefined) return `${f.line}:${f.column ?? 1}`;
+  return f.start !== undefined ? `offset ${f.start}` : '';
+}
+
+function formatFindings(findings: LocatedFinding[]): string {
   if (!findings.length) return 'No secrets found.';
   const lines = findings.map((f) => {
-    const where = f.path ? `  @ ${f.path}` : f.start !== undefined ? `  @ ${f.start}` : '';
+    const location = findingLocation(f);
+    const where = location ? `\n   at ${location}` : '';
     return `⚠  ${f.label} (${f.detector})${where}\n   ${f.why}`;
   });
   const noun = findings.length === 1 ? 'finding' : 'findings';
   return `${findings.length} ${noun}:\n\n${lines.join('\n\n')}`;
+}
+
+function formatJson(findings: LocatedFinding[], scannedFiles: string[]): string {
+  return JSON.stringify({
+    schemaVersion: 1,
+    tool: { name: 'flare-redact', version: VERSION },
+    summary: { total: findings.length, filesScanned: scannedFiles.length },
+    findings: findings.map(reportFinding),
+  }, null, 2);
+}
+
+function formatSarif(findings: LocatedFinding[]): string {
+  const rules = [...new Map(findings.map((f) => [f.detector, {
+    id: f.detector,
+    name: f.label,
+    shortDescription: { text: f.label },
+    help: { text: f.why },
+  }])).values()];
+  const results = findings.map((f) => {
+    const physicalLocation = f.file ? {
+      artifactLocation: { uri: f.file },
+      ...(f.line !== undefined ? { region: { startLine: f.line, startColumn: f.column ?? 1 } } : {}),
+    } : undefined;
+    return {
+      ruleId: f.detector,
+      level: 'warning',
+      message: { text: `${f.label}: ${f.why}` },
+      ...(physicalLocation ? { locations: [{ physicalLocation }] } : {}),
+      ...(f.path ? { properties: { path: f.path } } : {}),
+    };
+  });
+  return JSON.stringify({
+    version: '2.1.0',
+    $schema: 'https://json.schemastore.org/sarif-2.1.0.json',
+    runs: [{
+      tool: { driver: { name: 'flare-redact', version: VERSION, informationUri: 'https://github.com/umudhasanli/flare-redact', rules } },
+      results,
+    }],
+  }, null, 2);
+}
+
+function runScan(files: string[], jsonMode: boolean, opts: RedactOptions, format: ScanFormat): number {
+  const findings: LocatedFinding[] = [];
+  const inputs = files.length ? files : [undefined];
+  try {
+    for (const file of inputs) {
+      const raw = file ? readFileSync(file, 'utf8') : readStdin();
+      const data = jsonMode ? tryParse(raw, file) : raw;
+      if (data === PARSE_ERROR) return 2;
+      for (const finding of scan(data, opts)) findings.push(file ? { ...finding, file } : finding);
+    }
+  } catch (e) {
+    process.stderr.write(`${(e as Error).message}\n`);
+    return 2;
+  }
+
+  const out = format === 'json'
+    ? formatJson(findings, files)
+    : format === 'sarif'
+      ? formatSarif(findings)
+      : formatFindings(findings);
+  process.stdout.write(out + '\n');
+  return findings.length ? 1 : 0;
 }
 
 export function main(argv: string[]): number {
@@ -128,7 +225,7 @@ export function main(argv: string[]): number {
     process.stderr.write(`${(e as Error).message}\n\n${HELP}`);
     return 2;
   }
-  const { opts, files, scanMode, summaryMode, jsonMode, csvMode, showHelp, showVersion, listMode, vaultFile, restoreFile } = parsed;
+  const { opts, files, scanMode, scanFormat, summaryMode, jsonMode, csvMode, showHelp, showVersion, listMode, vaultFile, restoreFile } = parsed;
 
   if (showHelp) { process.stdout.write(HELP); return 0; }
   if (showVersion) { process.stdout.write(`${VERSION}\n`); return 0; }
@@ -139,7 +236,17 @@ export function main(argv: string[]): number {
     return 0;
   }
 
-  const raw = files.length ? files.map((f) => readFileSync(f, 'utf8')).join('\n') : readStdin();
+  if (scanMode && !summaryMode && !vaultFile && !restoreFile) {
+    return runScan(files, jsonMode, opts, scanFormat);
+  }
+
+  let raw: string;
+  try {
+    raw = files.length ? files.map((f) => readFileSync(f, 'utf8')).join('\n') : readStdin();
+  } catch (e) {
+    process.stderr.write(`${(e as Error).message}\n`);
+    return 2;
+  }
   const data: unknown = jsonMode ? tryParse(raw) : raw;
   if (jsonMode && data === PARSE_ERROR) return 2;
 
@@ -165,12 +272,6 @@ export function main(argv: string[]): number {
     return s.total ? 1 : 0;
   }
 
-  if (scanMode) {
-    const findings = scan(data, opts);
-    process.stdout.write(formatFindings(findings) + '\n');
-    return findings.length ? 1 : 0;
-  }
-
   if (jsonMode) {
     process.stdout.write(JSON.stringify(redact(data, opts), null, 2) + '\n');
     return 0;
@@ -187,11 +288,11 @@ export function main(argv: string[]): number {
 
 const PARSE_ERROR = Symbol('parse-error');
 
-function tryParse(raw: string): unknown {
+function tryParse(raw: string, source?: string): unknown {
   try {
     return JSON.parse(raw);
   } catch (e) {
-    process.stderr.write(`invalid JSON: ${(e as Error).message}\n`);
+    process.stderr.write(`invalid JSON${source ? ` in ${source}` : ''}: ${(e as Error).message}\n`);
     return PARSE_ERROR;
   }
 }
