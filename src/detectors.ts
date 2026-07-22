@@ -14,6 +14,22 @@ export interface Detector {
   default: boolean;
   /** Group labels — e.g. `["pii","id","tr"]` — so `enable`/`disable` can target a set. */
   tags?: string[];
+  /** Privacy impact used to resolve overlapping detections. */
+  risk?: 'low' | 'medium' | 'high' | 'critical';
+  /** Explicit overlap priority. Higher-priority findings win. */
+  priority?: number;
+  /** Capture group containing the sensitive value when the full match includes context. */
+  capture?: number;
+  /** Starting confidence before contextual validation, from 0 to 1. */
+  confidence?: number;
+  /** Optional nearby evidence used to adjust confidence. */
+  context?: {
+    positive?: RegExp;
+    negative?: RegExp;
+    window?: number;
+  };
+  /** Cheap literal gate evaluated before the regular expression. */
+  prefilter?: string[];
 }
 
 export function keepPrefix(n: number) {
@@ -54,6 +70,7 @@ export function entropy(s: string): number {
   return e;
 }
 
+/** @deprecated Non-cryptographic fingerprint retained only for compatibility. */
 export function fnv1a(s: string): string {
   let h = 0x811c9dc5;
   for (let i = 0; i < s.length; i++) {
@@ -61,39 +78,6 @@ export function fnv1a(s: string): string {
     h = Math.imul(h, 0x01000193);
   }
   return (h >>> 0).toString(16).padStart(8, '0');
-}
-
-function mulberry32(seed: number) {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-const FPE_DIGITS = '0123456789';
-const FPE_LOWER = 'abcdefghijklmnopqrstuvwxyz';
-const FPE_UPPER = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-
-/**
- * Format-preserving pseudonym: same length and character classes as the input,
- * so an email stays email-shaped and a card stays card-shaped. Deterministic —
- * the same value (and salt) always maps to the same output, which keeps joins
- * and references intact across a dataset.
- */
-export function fpe(value: string, salt = ''): string {
-  const seed = parseInt(fnv1a(salt + value), 16) >>> 0;
-  const rand = mulberry32(seed || 1);
-  let out = '';
-  for (const ch of value) {
-    if (ch >= '0' && ch <= '9') out += FPE_DIGITS[Math.floor(rand() * 10)];
-    else if (ch >= 'a' && ch <= 'z') out += FPE_LOWER[Math.floor(rand() * 26)];
-    else if (ch >= 'A' && ch <= 'Z') out += FPE_UPPER[Math.floor(rand() * 26)];
-    else out += ch;
-  }
-  return out;
 }
 
 export const SENSITIVE_KEY_RE =
@@ -122,7 +106,8 @@ export const DETECTORS: Detector[] = [
     id: 'aws_access_key',
     label: 'AWS access key ID',
     why: 'Pairs with a secret key to control cloud resources and billing.',
-    pattern: /\b(?:AKIA|ASIA|AGPA|AIDA|AROA|ANPA|ANVA)[A-Z0-9]{16}\b/g,
+    pattern: /\b(?:AKIA|ASIA|AGPA|AIDA|AROA|ANPA|ANVA)(?:[ \t-]?[A-Z0-9]){16}\b/g,
+    validate: (value) => /^(?:AKIA|ASIA|AGPA|AIDA|AROA|ANPA|ANVA)[A-Z0-9]{16}$/.test(value.replace(/[ \t-]/g, '')),
     mask: keepPrefix(4),
     default: true,
   },
@@ -247,6 +232,20 @@ export const DETECTORS: Detector[] = [
     mask: (m) => (m[0] ?? '') + '***@***',
     default: true,
     tags: ['pii'],
+    prefilter: ['@'],
+  },
+  {
+    id: 'obfuscated_email',
+    label: 'Obfuscated email address',
+    why: 'An email written with explicit “at” and “dot” separators to evade ordinary filters.',
+    pattern: /\b[A-Za-z0-9._%+-]{1,64}\s*(?:\[at\]|\(at\))\s*[A-Za-z0-9-]{1,63}(?:\s*(?:\[dot\]|\(dot\))\s*[A-Za-z0-9-]{1,63}){1,4}\b/gi,
+    mask: (m) => (m[0] ?? '') + '*** [at] *** [dot] ***',
+    default: true,
+    tags: ['pii', 'email', 'obfuscated'],
+    risk: 'high',
+    confidence: 0.84,
+    priority: 45,
+    prefilter: ['[at]', '(at)'],
   },
   {
     id: 'credit_card',
@@ -274,6 +273,7 @@ export const DETECTORS: Detector[] = [
     pattern: /\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\b/g,
     mask: () => '***.***.***.***',
     default: false,
+    tags: ['network'],
   },
   {
     id: 'ipv6',
@@ -282,6 +282,7 @@ export const DETECTORS: Detector[] = [
     pattern: /\b(?:[A-Fa-f0-9]{1,4}:){2,7}[A-Fa-f0-9]{1,4}\b/g,
     mask: () => '[REDACTED IPv6]',
     default: false,
+    tags: ['network'],
   },
   {
     id: 'mac_address',
@@ -290,6 +291,7 @@ export const DETECTORS: Detector[] = [
     pattern: /\b(?:[A-Fa-f0-9]{2}:){5}[A-Fa-f0-9]{2}\b/g,
     mask: () => '**:**:**:**:**:**',
     default: false,
+    tags: ['network'],
   },
   {
     id: 'high_entropy',
@@ -300,6 +302,45 @@ export const DETECTORS: Detector[] = [
     mask: keepPrefix(4),
     default: false,
     tags: ['secret'],
+  },
+  {
+    id: 'person_name',
+    label: 'Person name',
+    why: 'A person name appearing after an explicit identity label.',
+    pattern: /(?:full[ _-]?name|customer[ _-]?name|contact[ _-]?name|name|ad[ıi]|isim|nombre|nom|nome|姓名|الاسم)\s*(?:[:=]|\bis\b)\s*["']?([\p{L}][\p{L}'’.-]{1,39}(?:\s+[\p{L}][\p{L}'’.-]{1,39}){1,3})/giu,
+    capture: 1,
+    mask: () => '[REDACTED PERSON]',
+    default: false,
+    tags: ['pii', 'contextual'],
+    risk: 'high',
+    confidence: 0.86,
+    priority: 60,
+  },
+  {
+    id: 'street_address',
+    label: 'Street address',
+    why: 'A street address appearing after an explicit address label.',
+    pattern: /(?:street[ _-]?address|postal[ _-]?address|shipping[ _-]?address|address|ünvan|adres|dirección|adresse|indirizzo|地址|العنوان)\s*[:=]\s*["']?(\d{1,6}\s+[\p{L}0-9.'’ -]{2,60}\s+(?:street|st|road|rd|avenue|ave|boulevard|blvd|lane|ln|drive|dr|way|küçəsi|küçe|sokak|cadde))/giu,
+    capture: 1,
+    mask: () => '[REDACTED ADDRESS]',
+    default: false,
+    tags: ['pii', 'contextual'],
+    risk: 'high',
+    confidence: 0.9,
+    priority: 65,
+  },
+  {
+    id: 'date_of_birth',
+    label: 'Date of birth',
+    why: 'A birth date is a strong quasi-identifier when linked to a person.',
+    pattern: /(?:date[ _-]?of[ _-]?birth|birth[ _-]?date|dob|doğum[ _-]?tarixi|fecha[ _-]?de[ _-]?nacimiento|date[ _-]?de[ _-]?naissance|出生日期)\s*[:=]\s*["']?((?:19|20)\d{2}[-/.](?:0?[1-9]|1[0-2])[-/.](?:[12]\d|3[01]|0?[1-9])|(?:[12]\d|3[01]|0?[1-9])[-/.](?:0?[1-9]|1[0-2])[-/.](?:19|20)\d{2})/giu,
+    capture: 1,
+    mask: () => '[REDACTED DOB]',
+    default: false,
+    tags: ['pii', 'contextual'],
+    risk: 'high',
+    confidence: 0.96,
+    priority: 70,
   },
   ...LOCALE_DETECTORS,
   ...EXTRA_DETECTORS,

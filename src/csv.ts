@@ -66,9 +66,9 @@ export function stringifyCsv(rows: string[][]): string {
 }
 
 /**
- * Redact every cell of a CSV. With `{ mode: 'fpe' }` the output is
- * format-preserving and deterministic, so the same value maps the same way in
- * every row — a safe, join-consistent copy of your data for staging and tests.
+ * Redact every cell of a CSV. With a keyed `pseudonym` or `surrogate` mode the
+ * same value maps the same way in every row, preserving joins within one key
+ * domain for staging and tests.
  */
 export function redactCsv(text: string, opts: RedactOptions = {}): string {
   const rows = parseCsv(text);

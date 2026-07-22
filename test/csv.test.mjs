@@ -25,9 +25,9 @@ test('redactCsv masks values but leaves headers and structure', () => {
   assert.match(rows[1][2], /\*\*\*\* 4242$/);
 });
 
-test('redactCsv in fpe mode is deterministic and join-consistent', () => {
+test('redactCsv in pseudonym mode is deterministic and join-consistent', () => {
   const csv = 'email\nbob@x.io\nbob@x.io\nalice@x.io';
-  const rows = parseCsv(redactCsv(csv, { mode: 'fpe' }));
+  const rows = parseCsv(redactCsv(csv, { mode: 'pseudonym', transformSecret: 'dataset-transform-secret' }));
   assert.equal(rows[1][0], rows[2][0]); // same email → same masked value (joins survive)
   assert.notEqual(rows[1][0], rows[3][0]); // different email → different
   assert.match(rows[1][0], /^[a-z]+@[a-z]\.[a-z]+$/); // still email-shaped

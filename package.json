@@ -1,7 +1,7 @@
 {
   "name": "flare-redact",
-  "version": "0.8.0",
-  "description": "Hide secrets & PII in logs, prompts, and text before they leak — with a reversible layer that keeps them out of your OpenAI/Anthropic calls. Zero dependencies, ReDoS-safe.",
+  "version": "0.9.0",
+  "description": "Local, zero-dependency secret and PII redaction with contextual findings, secure reversible vaults, and LLM adapters.",
   "type": "module",
   "sideEffects": false,
   "main": "./dist/index.js",
@@ -50,12 +50,18 @@
   "files": [
     "dist",
     "bin",
+    "bench/performance.mjs",
+    "bench/adversarial-runtime.mjs",
     "README.md",
+    "CHANGELOG.md",
+    "SECURITY.md",
     "LICENSE"
   ],
   "scripts": {
     "build": "tsc",
     "test": "npm run build && node --test",
+    "benchmark": "npm run build && node bench/performance.mjs",
+    "benchmark:adversarial": "npm run build && node bench/adversarial-runtime.mjs",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
@@ -113,7 +119,9 @@
     "anonymization",
     "pseudonymization",
     "tokenization",
-    "format-preserving",
+    "surrogate-data",
+    "hmac",
+    "aes-gcm",
     "i18n",
     "multi-language",
     "national-id",

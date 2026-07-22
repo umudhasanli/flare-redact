@@ -31,7 +31,7 @@ test('terms work in any language (unicode boundaries)', () => {
 test('terms are reversible in a vault', () => {
   const v = createVault({ terms: ['Project Zeus'] });
   const masked = v.redact('ship Project Zeus');
-  assert.match(masked, /\[CUSTOM_TERM_1\]/);
+  assert.match(masked, /\[FR_CUSTOM_TERM_[0-9a-f]{24}\]/);
   assert.equal(v.restore(masked), 'ship Project Zeus');
 });
 

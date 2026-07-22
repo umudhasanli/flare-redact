@@ -65,6 +65,6 @@ test('createRedactor exposes a vault bound to the policy', () => {
   const r = createRedactor();
   const v = r.vault();
   const red = v.redact('to bob@x.io');
-  assert.match(red, /\[EMAIL_1\]/);
+  assert.match(red, /\[FR_EMAIL_[0-9a-f]{24}\]/);
   assert.equal(v.restore(red), 'to bob@x.io');
 });

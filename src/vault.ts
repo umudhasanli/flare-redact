@@ -15,13 +15,24 @@ export interface Vault {
 
 export interface VaultOptions extends RedactOptions {
   placeholder?: (detectorId: string, index: number) => string;
+  /** Human-readable counters are predictable; use only for trusted local flows. */
+  placeholderStyle?: 'opaque' | 'readable';
 }
 
 const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+function opaqueToken(): string {
+  const provider = globalThis.crypto;
+  if (!provider?.getRandomValues) throw new Error('Web Crypto is required to create opaque vault placeholders.');
+  const bytes = provider.getRandomValues(new Uint8Array(12));
+  let out = '';
+  for (const byte of bytes) out += byte.toString(16).padStart(2, '0');
+  return out;
+}
+
 /**
  * Build a single-pass restorer from placeholder→original entries. Longest
- * placeholders match first, so `[EMAIL_10]` can't be clobbered by `[EMAIL_1]`.
+ * placeholders match first so prefix-like custom tokens cannot clobber peers.
  */
 export function buildRestore(entries: Array<[string, string]>): (text: string) => string {
   if (!entries.length) return (t) => t;
@@ -43,8 +54,8 @@ function walkStrings(value: unknown, fn: (s: string) => string): unknown {
 }
 
 /**
- * A reversible redactor. `redact()` swaps each secret for a stable placeholder
- * (`[EMAIL_1]`) and remembers the mapping; `restore()` puts the originals back.
+ * A reversible redactor. `redact()` swaps each secret for a stable opaque
+ * placeholder and remembers the mapping; `restore()` puts the originals back.
  * The same value always gets the same placeholder, so references survive a
  * round trip — send the redacted text to an LLM, then restore its answer.
  */
@@ -52,7 +63,9 @@ export function createVault(opts: VaultOptions = {}): Vault {
   const dets = resolveDetectors(opts);
   const allow = allowMatcher(opts);
   const matchKey = keyMatcher(opts);
-  const fmt = opts.placeholder ?? ((id, n) => `[${id.toUpperCase()}_${n}]`);
+  const fmt = opts.placeholder ?? (opts.placeholderStyle === 'readable'
+    ? ((id, n) => `[${id.toUpperCase()}_${n}]`)
+    : ((id) => `[FR_${id.toUpperCase()}_${opaqueToken()}]`));
 
   const origToPh = new Map<string, string>();
   const phToOrig = new Map<string, string>();
@@ -64,13 +77,17 @@ export function createVault(opts: VaultOptions = {}): Vault {
     const n = (counts.get(detId) ?? 0) + 1;
     counts.set(detId, n);
     const ph = fmt(detId, n);
+    const collision = phToOrig.get(ph);
+    if (collision !== undefined && collision !== value) {
+      throw new Error(`Placeholder generator produced a duplicate token for ${detId}.`);
+    }
     origToPh.set(value, ph);
     phToOrig.set(ph, value);
     return ph;
   };
 
   const redactStr = (text: string): string => {
-    const hits = scanString(text, dets, allow);
+    const hits = scanString(text, dets, allow, opts);
     if (!hits.length) return text;
     let out = '';
     let cursor = 0;
@@ -109,10 +126,10 @@ export function createVault(opts: VaultOptions = {}): Vault {
 /** Put originals back into any text/object using a vault or a placeholder→value map. */
 export function restore<T>(input: T, source: Vault | Map<string, string> | Record<string, string>): T {
   const entries: Array<[string, string]> =
-    typeof (source as Vault).entries === 'function'
-      ? (source as Vault).entries()
-      : source instanceof Map
-        ? [...source]
+    source instanceof Map
+      ? [...source]
+      : typeof (source as Vault).entries === 'function'
+        ? (source as Vault).entries()
         : Object.entries(source as Record<string, string>);
   if (!entries.length) return input;
   return walkStrings(input, buildRestore(entries)) as T;

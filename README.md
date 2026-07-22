@@ -15,7 +15,7 @@
   <img src="https://img.shields.io/npm/types/flare-redact.svg" alt="TypeScript">
   <img src="https://img.shields.io/badge/dependencies-0-brightgreen" alt="Zero dependencies">
   <img src="https://img.shields.io/badge/languages-24-4f46e5" alt="24 languages">
-  <img src="https://img.shields.io/badge/detectors-50-4f46e5" alt="50 detectors">
+  <img src="https://img.shields.io/badge/detectors-56-4f46e5" alt="56 detectors">
   <img src="https://img.shields.io/badge/runtime-node%20%7C%20browser%20%7C%20edge-blue" alt="Runtimes">
 </p>
 
@@ -46,8 +46,8 @@ redact('User alice@corp.com paid with 4242 4242 4242 4242, token ghp_' + 'a'.rep
 Nothing to configure. No list of field paths to maintain. No native build step.
 
 > **The same problem now has a new address: your LLM calls.** Wrap your OpenAI or
-> Anthropic client and secrets are stripped from every prompt and restored in the
-> reply — the model never sees the real data, your app still gets the right answer.
+> Anthropic client and detected secrets are stripped from prompts and restored in
+> the reply — the model never sees those original values, while references survive.
 > [Jump to it ↓](#redact-prompts-before-they-reach-an-llm)
 
 <p align="center">
@@ -56,8 +56,8 @@ Nothing to configure. No list of field paths to maintain. No native build step.
 
 |   |   |   |
 |---|---|---|
-| 🔍 **Content-aware** — reads values, not just field names | ♻️ **Reversible** — vault: redact → use → restore | 🎭 **Format-preserving** — emails stay email-shaped |
-| 🤖 **LLM-safe** — strips secrets before OpenAI/Anthropic | 🌍 **24 languages** — plus checksum-validated national IDs | 🛡️ **ReDoS-safe · 0 deps** — safe on untrusted input |
+| 🔍 **Context-aware** — spans carry risk and confidence | 🔐 **Secure vaults** — opaque tokens, optional AES-GCM persistence | 🎭 **Useful test data** — keyed pseudonyms and typed surrogates |
+| 🤖 **LLM boundary** — strips secrets before OpenAI/Anthropic | 🌍 **24-language secret vocabulary** — plus checksum-validated IDs | 🪶 **Zero runtime dependencies** — Node, browser, and edge |
 
 ## Contents
 
@@ -66,6 +66,7 @@ Nothing to configure. No list of field paths to maintain. No native build step.
 - [Redact prompts before they reach an LLM](#redact-prompts-before-they-reach-an-llm)
 - [Ways to hide a value](#ways-to-hide-a-value)
 - [Reversible redaction](#reversible-redaction)
+- [Contextual and model-assisted PII](#contextual-and-model-assisted-pii)
 - [Build a private chat app](#build-a-private-chat-app)
 - [Your own words](#your-own-words)
 - [See what leaks, and why](#see-what-leaks-and-why)
@@ -77,9 +78,10 @@ Nothing to configure. No list of field paths to maintain. No native build step.
 - [Fail a build when a secret sneaks in](#fail-a-build-when-a-secret-sneaks-in)
 - [CLI](#cli)
 - [What it catches](#what-it-catches)
-- [Every language, every country](#every-language-every-country)
+- [Multilingual secret vocabulary and IDs](#multilingual-secret-vocabulary-and-ids)
 - [Custom detectors & allowlists](#custom-detectors--allowlists)
 - [API](#api)
+- [Security boundaries](#security-boundaries)
 - [Why not a field allowlist?](#why-not-a-field-allowlist)
 
 ## Install
@@ -89,6 +91,8 @@ npm install flare-redact
 ```
 
 Node 18+, and it runs in the browser and edge runtimes too — zero dependencies.
+Upgrading from 0.8? Read the [`0.9 migration notes`](CHANGELOG.md#090--unreleased)
+before changing protected transform or vault behavior.
 
 ## Redact anything
 
@@ -117,9 +121,9 @@ redact({
 
 Your app sends user data to OpenAI or Anthropic. Somewhere in that prompt is a
 customer's email, an API key, or a card number — and now it's left your systems.
-Wrap the client once, and secrets are stripped from every prompt and put back in
-the reply. The model never sees the real values; your code still gets the right
-answer.
+Wrap the client once, and detected secrets are stripped from prompts and put back
+in the reply. The model never sees those original values; your code keeps the
+references it needs.
 
 ```js
 import { wrapOpenAI } from 'flare-redact/llm';
@@ -134,7 +138,7 @@ const res = await openai.chat.completions.create({
 
 ```
 your app sends  →  Email the invoice to alice@corp.com, card 4242 4242 4242 4242
-the model sees  →  Email the invoice to [EMAIL_1], card [CREDIT_CARD_1]
+the model sees  →  Email the invoice to [FR_EMAIL_7f2a…], card [FR_CREDIT_CARD_19be…]
 your app gets   →  Sent to alice@corp.com. Card 4242 4242 4242 4242 wasn't stored.
 ```
 
@@ -151,16 +155,27 @@ after it's hidden.
 ```js
 redact('bob@corp.com', { mode: 'mask'  }); // 'b***@***'          (default)
 redact('bob@corp.com', { mode: 'label' }); // '[REDACTED:email]'
-redact('bob@corp.com', { mode: 'hash'  }); // 'email_f63d8d56'    (deterministic)
-redact('bob@corp.com', { mode: 'fpe'   }); // 'kqz@rwmp.dnu'      (keeps the shape)
+
+const protectedOptions = { transformSecret: process.env.FLARE_REDACT_SECRET };
+redact('bob@corp.com', { ...protectedOptions, mode: 'hash' });
+// 'email_3baf4d28d7c88317a…' — HMAC-SHA-256 fingerprint
+
+redact('bob@corp.com', { ...protectedOptions, mode: 'pseudonym' });
+// 'kqz@rwmp.dnu' — keyed, deterministic, keeps character classes
+
+redact('bob@corp.com', { ...protectedOptions, mode: 'surrogate' });
+// 'user_93a78c61e204@example.invalid' — type-consistent synthetic value
 ```
 
-`hash` is the useful one for support work: the same input always hashes to the
-same token, so you can still tell that two log lines came from the same user —
-without ever storing who that user is. `fpe` (format-preserving) keeps the
-*shape* — an email stays email-shaped, a card stays card-shaped — which is what
-you want for realistic-but-safe test data. Both are deterministic; add `hashSalt`
-to make the mapping per-service.
+Protected deterministic modes require `transformSecret`; they never silently
+fall back to a public unsalted fingerprint. `hash` is useful for correlation,
+`pseudonym` retains the original character shape, and `surrogate` emits typed
+synthetic values such as reserved-domain emails and Luhn-valid card numbers.
+Use a separate secret per environment or correlation domain.
+
+`pseudonym` is deliberately **not** described as format-preserving encryption.
+It is non-reversible pseudonymization, not NIST FF1. The old `fpe` name remains
+as a compatibility alias but is deprecated.
 
 Or replace everything with one fixed string:
 
@@ -180,24 +195,90 @@ import { createVault } from 'flare-redact';
 
 const vault = createVault();
 const safe = vault.redact('charge bob@corp.com on card 4242 4242 4242 4242');
-// 'charge [EMAIL_1] on card [CREDIT_CARD_1]'
+// 'charge [FR_EMAIL_7f2ad4…] on card [FR_CREDIT_CARD_19be63…]'
 
 vault.restore(safe);
 // 'charge bob@corp.com on card 4242 4242 4242 4242'
 ```
 
-The same value always gets the same placeholder, so references survive the round
-trip. Works on objects too, and `restore()` also takes a plain placeholder→value
-map if you persisted one.
+The same value gets the same placeholder inside one vault, so references survive
+the round trip. Default placeholders include 96 random bits instead of a global
+sequence number. Human-readable `[EMAIL_1]` counters remain available through
+`createVault({ placeholderStyle: 'readable' })` for trusted local workflows.
+
+The mapping is as sensitive as the original data. Encrypt it before persistence:
+
+```js
+import { sealVault, openVault, restore } from 'flare-redact';
+
+const encrypted = await sealVault(vault, process.env.FLARE_REDACT_VAULT_PASSWORD);
+await fs.writeFile('session.vault.json', JSON.stringify(encrypted), { mode: 0o600 });
+
+const entries = await openVault(encrypted, process.env.FLARE_REDACT_VAULT_PASSWORD);
+restore(safe, new Map(entries));
+```
+
+Sealed vaults use PBKDF2-SHA-256 with a fresh salt and AES-256-GCM with a fresh
+nonce. Wrong passwords and modified files fail closed.
+
+From the CLI, `--vault` and `--restore` use encrypted files by default. Passwords
+come from `FLARE_REDACT_VAULT_PASSWORD` (or the variable named by
+`--vault-password-env`) so they do not appear in shell history:
+
+```bash
+export FLARE_REDACT_VAULT_PASSWORD='use-a-secret-manager-in-production'
+flare-redact --vault session.vault.json < input.txt > safe.txt
+flare-redact --restore session.vault.json < safe.txt > restored.txt
+```
+
+## Contextual and model-assisted PII
+
+Structured identifiers and credentials are best handled by deterministic rules
+and checksum validators. Names and addresses need context, so three conservative
+detectors are opt-in:
+
+```js
+const findings = scan(
+  'Customer name: Alice Example; address: 120 Cedar Street; DOB: 1990-04-23',
+  { enable: ['contextual'] },
+);
+
+// person_name, street_address, date_of_birth
+// each finding includes risk, confidence, and the exact sensitive span
+```
+
+For broader multilingual free-text PII, connect a local model without coupling
+the zero-dependency core to one ML runtime:
+
+```js
+const policy = {
+  semanticProvider: {
+    async detect(text) {
+      return [{
+        detector: 'person_model', label: 'Person',
+        why: 'Local multilingual NER result.',
+        start: 12, end: 25, confidence: 0.94, risk: 'high',
+      }];
+    },
+  },
+  minConfidence: 0.8,
+};
+
+const safe = await redactAsync(input, policy);
+```
+
+Semantic and deterministic spans enter the same overlap arbitration. Higher-risk,
+higher-priority, and better-validated findings win instead of whichever regular
+expression happens to run first.
 
 ## Build a private chat app
 
 If you're building a chat interface — over your own local model or any API — a
 **session** is the drop-in layer. One session holds one vault, so a value keeps
 the same placeholder across every turn: mask the user's message on the way in,
-restore the model's reply on the way out. It's model-agnostic, synchronous, and
-fast enough that the cost vanishes next to inference (a 13 KB message redacts in
-~0.3 ms).
+restore the model's reply on the way out. It's model-agnostic and synchronous.
+Run `npm run benchmark` on your own target runtime instead of relying on a
+hardware-independent latency claim.
 
 ```js
 import { createSession } from 'flare-redact';
@@ -221,8 +302,8 @@ process(out.flush());
 ```
 
 `session.redactMessages([{ role, content }])` masks a whole chat array at once,
-and `session.reset()` starts a fresh conversation. The model never sees the real
-data; your app still works end to end.
+and `session.reset()` starts a fresh conversation. Detected original values stay
+local while your app keeps a reversible reference.
 
 ## Your own words
 
@@ -239,7 +320,7 @@ redact('Launch Project Zeus with Falcon', {
 
 // reversible — send to a model, get it back
 const vault = createVault({ terms: ['Project Zeus'] });
-const safe = vault.redact('ship Project Zeus');   // 'ship [CUSTOM_TERM_1]'
+const safe = vault.redact('ship Project Zeus');   // 'ship [FR_CUSTOM_TERM_a17c…]'
 vault.restore(safe);                               // 'ship Project Zeus'
 ```
 
@@ -247,7 +328,8 @@ The same works from the CLI, including a full round-trip — mask, send the safe
 text anywhere, then restore what comes back:
 
 ```bash
-# add words inline or from a file, and write the mapping to a vault file
+# add words inline or from a file, and write an encrypted vault
+export FLARE_REDACT_VAULT_PASSWORD='read-this-from-your-secret-manager'
 flare-redact --term "Project Zeus" --terms codenames.txt --vault map.json < in > safe
 
 # later, restore the originals from that map
@@ -361,19 +443,19 @@ process.stdin.pipe(redactStream()).pipe(process.stdout);
 
 ## Anonymize a dataset for staging
 
-Point it at a JSON or CSV dump with `--mode fpe` and you get a copy that's safe
-to hand to staging or a test suite. Format-preserving means an email stays
-email-shaped and a card stays card-shaped; deterministic means the same value
-maps the same way in every row — so foreign keys and joins still line up.
+Point it at a JSON or CSV dump with `--mode surrogate` and you get deterministic,
+typed synthetic values. The same input maps the same way in every row under one
+key, so joins survive without calling the transformation encryption or anonymity.
 
 ```bash
-flare-redact --csv --mode fpe < customers.csv > customers.safe.csv
+export FLARE_REDACT_SECRET='read-this-from-your-secret-manager'
+flare-redact --csv --mode surrogate < customers.csv > customers.safe.csv
 ```
 
 ```
-Alice,alice@corp.com,4242 4242 4242 4242      Alice,lkjjg@vfld.adz,7042 5270 7797 8929
-Bob,bob@corp.com,5555 5555 5555 4444     →    Bob,yay@vjxl.fpe,0888 2706 6232 0279
-Alice,alice@corp.com,4242 4242 4242 4242      Alice,lkjjg@vfld.adz,7042 5270 7797 8929
+Alice,alice@corp.com,4242 4242 4242 4242      Alice,user_93a78c61e204@example.invalid,7042 5270 7797 8927
+Bob,bob@corp.com,5555 5555 5555 4444     →    Bob,user_441ae72c0901@example.invalid,0888 2706 6232 0274
+Alice,alice@corp.com,4242 4242 4242 4242      Alice,user_93a78c61e204@example.invalid,7042 5270 7797 8927
 ```
 
 `redactCsv(text, opts)` is available from `flare-redact/csv` for the same thing
@@ -415,8 +497,8 @@ npm install -g flare-redact
 
 ```bash
 tail -f app.log | flare-redact               # stream redacted logs
-flare-redact --json --mode hash < event.json # deep-redact a JSON payload
-flare-redact --csv --mode fpe < dump.csv     # anonymize a dataset for staging
+FLARE_REDACT_SECRET=… flare-redact --json --mode hash < event.json
+FLARE_REDACT_SECRET=… flare-redact --csv --mode surrogate < dump.csv
 flare-redact --scan config.env               # list findings + why (exit 1 if any)
 flare-redact --scan --format json .env app.log # safe machine-readable report
 flare-redact --sarif .env > results.sarif    # GitHub code-scanning report
@@ -448,6 +530,7 @@ On by default:
 | `url_credentials` | passwords inside connection strings |
 | `generic_assignment` | `password=`, `api_key: …`, `secret=…` (any language) |
 | `email` | email addresses |
+| `obfuscated_email` | bracket-obfuscated emails such as `name [at] host [dot] tld` |
 | `credit_card` | card numbers (Luhn-validated) |
 | `iban` | IBANs (mod-97 validated) |
 | `discord_bot_token` / `telegram_bot_token` | chat bot tokens |
@@ -469,7 +552,7 @@ Opt in with `enable`:
 Plus object values whose **key name** is sensitive (`password`, `token`,
 `authorization`, `cookie`, `cvv`, …) are masked regardless of content.
 
-## Every language, every country
+## Multilingual secret vocabulary and IDs
 
 Secrets like API keys and card numbers don't care what language your app is in.
 Neither does this — but the word-based checks do, so words like *password*,
@@ -535,14 +618,19 @@ redact(text, {
 
 ```ts
 redact<T>(input: T, opts?): T                 // masked copy, same shape
+redactAsync<T>(input: T, opts?): Promise<T>   // supports async local NER providers
 scan(input, opts?): Finding[]                 // findings + why, input untouched
+scanAsync(input, opts?): Promise<Finding[]>   // supports async local NER providers
 isClean(input, opts?): boolean                // any secrets at all?
-summary(input, opts?): { total, byDetector }  // counts per detector
+isCleanAsync(input, opts?): Promise<boolean>
+summary(input, opts?): { total, byDetector, byRisk }
 createRedactor(opts) / definePolicy(opts)      // one policy: redact, scan, vault(), wrapConsole, options
 wrapConsole(opts?, console?): () => void      // patch console.*, returns restore
 
 createVault(opts?): Vault                      // reversible: redact / restore / entries
 restore(input, vaultOrMap): T                  // put originals back
+sealVault(vaultOrEntries, password): Promise<SealedVaultV1>
+openVault(envelope, password): Promise<Array<[placeholder, original]>>
 
 // adapters — each takes the same options object
 pinoRedact(opts?)        // 'flare-redact/pino'    → { formatters: { log } }
@@ -563,7 +651,8 @@ redactStream(opts?): Transform                  // line-wise stream redaction
 // opts
 // {
 //   only?, enable?, disable?, custom?,   // which detectors run
-//   mode?: 'mask' | 'label' | 'hash' | 'fpe', hashSalt?, mask?,
+//   mode?: 'mask' | 'label' | 'hash' | 'pseudonym' | 'surrogate',
+//   transformSecret?, mask?, minConfidence?, semanticProvider?, limits?,
 //   redactKeys?: boolean | RegExp | string[],
 //   allow?: RegExp | string[],
 //   terms?: string[] | { term: replacement }, termsCaseSensitive?,
@@ -579,10 +668,29 @@ you *remembered* to name. The leak is always the field you forgot — the free-t
 message, the nested third-party payload, the string someone concatenated by hand.
 flare-redact scans the actual values, so it doesn't depend on your memory.
 
-And the patterns it scans with are **bounded and ReDoS-safe** — no nested
-quantifiers, no `(a+)+` blow-ups. You can point it at attacker-controlled input
-and it stays linear, the same principle behind its sibling
-[flare-regex](https://github.com/umudhasanli/flare-regex).
+Built-in patterns are reviewed for bounded structure, exercised by an
+adversarial runtime suite, and protected by per-string input and finding limits.
+JavaScript RegExp does not provide a formal linear-time guarantee, however, and
+arbitrary custom detectors are trusted code. Run the included benchmarks on your
+own runtime instead of treating a badge as a security proof:
+
+```bash
+npm run benchmark
+npm run benchmark:adversarial
+```
+
+## Security boundaries
+
+- Detection is best-effort; a clean scan is not proof that data contains no PII.
+- `pseudonym` is keyed, deterministic pseudonymization — not NIST FF1 encryption.
+- A vault map is sensitive; persist only the authenticated encrypted envelope.
+- Restoring a placeholder intentionally reveals its original locally. Do not
+  forward restored model output to another untrusted sink automatically.
+- The 24-language badge describes secret-key vocabulary, not general multilingual
+  named-entity recognition. Use a local `semanticProvider` for that task.
+
+Encrypted vaults do not protect a compromised host or secrets already resident
+in process memory. Deterministic transforms reveal when two inputs are equal.
 
 ## License
 

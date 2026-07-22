@@ -1,8 +1,21 @@
-import { readFileSync, writeFileSync } from 'node:fs';
-import { redact, scan, summary, createVault, restore, DETECTORS, type Mode, type RedactOptions, type Finding } from './index.js';
+import { chmodSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  redact,
+  scan,
+  summary,
+  createVault,
+  restore,
+  sealVault,
+  openVault,
+  isSealedVault,
+  DETECTORS,
+  type Mode,
+  type RedactOptions,
+  type Finding,
+} from './index.js';
 import { redactCsv } from './csv.js';
 
-const VERSION = '0.8.0';
+const VERSION = '0.9.0';
 type ScanFormat = 'pretty' | 'json' | 'sarif';
 
 const HELP = `flare-redact — hide secrets & PII before they hit a log
@@ -17,8 +30,10 @@ OPTIONS
   --summary         print a count of findings per detector
   --json            parse input as JSON and redact recursively
   --csv             parse input as CSV and redact every cell
-  --mode <m>        mask | label | hash | fpe  (default: mask)
-  --hash-salt <s>   salt for --mode hash
+  --mode <m>        mask | label | hash | pseudonym | surrogate
+  --secret-env <n>  read the transform key from env var <n>
+                    (default: FLARE_REDACT_SECRET)
+  --hash-salt <s>   deprecated; prefer --secret-env
   --only <ids>      use only these detectors (comma-separated)
   --enable <ids>    turn on extra detectors (e.g. ipv4,high_entropy)
   --disable <ids>   turn off detectors (e.g. email)
@@ -26,8 +41,12 @@ OPTIONS
   --allow <vals>    never redact these exact values (comma-separated)
   --term <word>     also catch this exact word/phrase (repeatable)
   --terms <file>    also catch every word/phrase in this file (one per line)
-  --vault <file>    reversible: mask with placeholders, write the map to <file>
-  --restore <file>  put originals back using a map written by --vault
+  --vault <file>    reversible: write an AES-GCM encrypted map to <file>
+  --restore <file>  restore using an encrypted map written by --vault
+  --vault-password-env <n>
+                    vault password env var (default: FLARE_REDACT_VAULT_PASSWORD)
+  --allow-plaintext-vault
+                    explicitly allow reading a legacy plaintext vault
   --list            show all detectors and exit
   -h, --help        show this help
   -v, --version     show version
@@ -54,6 +73,9 @@ interface ParsedArgs {
   listMode: boolean;
   vaultFile?: string;
   restoreFile?: string;
+  secretEnv: string;
+  vaultPasswordEnv: string;
+  allowPlaintextVault: boolean;
 }
 
 function csv(s: string | undefined): string[] {
@@ -73,6 +95,9 @@ function parseArgs(argv: string[]): ParsedArgs {
   let listMode = false;
   let vaultFile: string | undefined;
   let restoreFile: string | undefined;
+  let secretEnv = 'FLARE_REDACT_SECRET';
+  let vaultPasswordEnv = 'FLARE_REDACT_VAULT_PASSWORD';
+  let allowPlaintextVault = false;
   const terms: string[] = [];
 
   for (let i = 0; i < argv.length; i++) {
@@ -92,8 +117,9 @@ function parseArgs(argv: string[]): ParsedArgs {
       case '--disable': opts.disable = csv(argv[++i]); break;
       case '--allow': opts.allow = csv(argv[++i]); break;
       case '--mask': opts.mask = argv[++i]; break;
-      case '--mode': opts.mode = argv[++i] as Mode; break;
+      case '--mode': opts.mode = parseMode(argv[++i]); break;
       case '--hash-salt': opts.hashSalt = argv[++i]; break;
+      case '--secret-env': secretEnv = envName(argv[++i], '--secret-env'); break;
       case '--term': { const w = argv[++i]; if (w) terms.push(w); break; }
       case '--terms': {
         const lines = readFileSync(argv[++i]!, 'utf8').split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
@@ -102,18 +128,48 @@ function parseArgs(argv: string[]): ParsedArgs {
       }
       case '--vault': vaultFile = argv[++i]; break;
       case '--restore': restoreFile = argv[++i]; break;
+      case '--vault-password-env': vaultPasswordEnv = envName(argv[++i], '--vault-password-env'); break;
+      case '--allow-plaintext-vault': allowPlaintextVault = true; break;
       default:
         if (a.startsWith('-')) throw new Error(`unknown option: ${a}`);
         files.push(a);
     }
   }
   if (terms.length) opts.terms = terms;
-  return { opts, files, scanMode, scanFormat, summaryMode, jsonMode, csvMode, showHelp, showVersion, listMode, vaultFile, restoreFile };
+  return {
+    opts,
+    files,
+    scanMode,
+    scanFormat,
+    summaryMode,
+    jsonMode,
+    csvMode,
+    showHelp,
+    showVersion,
+    listMode,
+    vaultFile,
+    restoreFile,
+    secretEnv,
+    vaultPasswordEnv,
+    allowPlaintextVault,
+  };
+}
+
+function envName(value: string | undefined, flag: string): string {
+  if (!value || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(value)) {
+    throw new Error(`${flag} requires a valid environment-variable name`);
+  }
+  return value;
 }
 
 function parseScanFormat(value: string | undefined): ScanFormat {
   if (value === 'pretty' || value === 'json' || value === 'sarif') return value;
   throw new Error(`invalid scan format: ${value ?? '(missing)'} (expected pretty, json, or sarif)`);
+}
+
+function parseMode(value: string | undefined): Mode {
+  if (value === 'mask' || value === 'label' || value === 'hash' || value === 'pseudonym' || value === 'surrogate' || value === 'fpe') return value;
+  throw new Error(`invalid mode: ${value ?? '(missing)'} (expected mask, label, hash, pseudonym, or surrogate)`);
 }
 
 function readStdin(): string {
@@ -148,7 +204,7 @@ function formatFindings(findings: LocatedFinding[]): string {
   const lines = findings.map((f) => {
     const location = findingLocation(f);
     const where = location ? `\n   at ${location}` : '';
-    return `⚠  ${f.label} (${f.detector})${where}\n   ${f.why}`;
+    return `⚠  ${f.label} (${f.detector}) [${f.risk}, ${(f.confidence * 100).toFixed(0)}%]${where}\n   ${f.why}`;
   });
   const noun = findings.length === 1 ? 'finding' : 'findings';
   return `${findings.length} ${noun}:\n\n${lines.join('\n\n')}`;
@@ -156,7 +212,7 @@ function formatFindings(findings: LocatedFinding[]): string {
 
 function formatJson(findings: LocatedFinding[], scannedFiles: string[]): string {
   return JSON.stringify({
-    schemaVersion: 1,
+    schemaVersion: 2,
     tool: { name: 'flare-redact', version: VERSION },
     summary: { total: findings.length, filesScanned: scannedFiles.length },
     findings: findings.map(reportFinding),
@@ -177,10 +233,10 @@ function formatSarif(findings: LocatedFinding[]): string {
     } : undefined;
     return {
       ruleId: f.detector,
-      level: 'warning',
+      level: f.risk === 'critical' ? 'error' : f.risk === 'high' ? 'warning' : 'note',
       message: { text: `${f.label}: ${f.why}` },
       ...(physicalLocation ? { locations: [{ physicalLocation }] } : {}),
-      ...(f.path ? { properties: { path: f.path } } : {}),
+      properties: { ...(f.path ? { path: f.path } : {}), risk: f.risk, confidence: f.confidence },
     };
   });
   return JSON.stringify({
@@ -217,7 +273,7 @@ function runScan(files: string[], jsonMode: boolean, opts: RedactOptions, format
   return findings.length ? 1 : 0;
 }
 
-export function main(argv: string[]): number {
+export async function main(argv: string[]): Promise<number> {
   let parsed: ParsedArgs;
   try {
     parsed = parseArgs(argv);
@@ -225,7 +281,28 @@ export function main(argv: string[]): number {
     process.stderr.write(`${(e as Error).message}\n\n${HELP}`);
     return 2;
   }
-  const { opts, files, scanMode, scanFormat, summaryMode, jsonMode, csvMode, showHelp, showVersion, listMode, vaultFile, restoreFile } = parsed;
+  const {
+    opts,
+    files,
+    scanMode,
+    scanFormat,
+    summaryMode,
+    jsonMode,
+    csvMode,
+    showHelp,
+    showVersion,
+    listMode,
+    vaultFile,
+    restoreFile,
+    secretEnv,
+    vaultPasswordEnv,
+    allowPlaintextVault,
+  } = parsed;
+
+  if (!opts.transformSecret && process.env[secretEnv]) opts.transformSecret = process.env[secretEnv];
+  if (opts.mode === 'fpe') {
+    process.stderr.write('warning: --mode fpe is deprecated; use --mode pseudonym (this is not encryption)\n');
+  }
 
   if (showHelp) { process.stdout.write(HELP); return 0; }
   if (showVersion) { process.stdout.write(`${VERSION}\n`); return 0; }
@@ -254,36 +331,69 @@ export function main(argv: string[]): number {
     process.stdout.write(jsonMode ? JSON.stringify(out, null, 2) + '\n' : String(out));
 
   if (restoreFile) {
-    emit(restore(data, JSON.parse(readFileSync(restoreFile, 'utf8'))));
-    return 0;
+    try {
+      const stored: unknown = JSON.parse(readFileSync(restoreFile, 'utf8'));
+      if (isSealedVault(stored)) {
+        const password = process.env[vaultPasswordEnv];
+        if (!password) throw new Error(`Set ${vaultPasswordEnv} to decrypt the vault.`);
+        emit(restore(data, new Map(await openVault(stored, password))));
+      } else {
+        if (!allowPlaintextVault) {
+          throw new Error('Refusing a plaintext vault. Pass --allow-plaintext-vault only for trusted legacy files.');
+        }
+        emit(restore(data, stored as Record<string, string>));
+      }
+      return 0;
+    } catch (e) {
+      process.stderr.write(`${(e as Error).message}\n`);
+      return 2;
+    }
   }
 
   if (vaultFile) {
-    const vault = createVault(opts);
-    const out = vault.redact(data);
-    writeFileSync(vaultFile, JSON.stringify(Object.fromEntries(vault.entries()), null, 2));
-    emit(out);
-    return 0;
+    try {
+      const password = process.env[vaultPasswordEnv];
+      if (!password) throw new Error(`Set ${vaultPasswordEnv} to encrypt the vault.`);
+      const vault = createVault(opts);
+      const out = vault.redact(data);
+      writeFileSync(vaultFile, JSON.stringify(await sealVault(vault, password), null, 2), { mode: 0o600 });
+      chmodSync(vaultFile, 0o600);
+      emit(out);
+      return 0;
+    } catch (e) {
+      process.stderr.write(`${(e as Error).message}\n`);
+      return 2;
+    }
   }
 
   if (summaryMode) {
-    const s = summary(data, opts);
-    process.stdout.write(JSON.stringify(s, null, 2) + '\n');
-    return s.total ? 1 : 0;
+    try {
+      const s = summary(data, opts);
+      process.stdout.write(JSON.stringify(s, null, 2) + '\n');
+      return s.total ? 1 : 0;
+    } catch (e) {
+      process.stderr.write(`${(e as Error).message}\n`);
+      return 2;
+    }
   }
 
-  if (jsonMode) {
-    process.stdout.write(JSON.stringify(redact(data, opts), null, 2) + '\n');
+  try {
+    if (jsonMode) {
+      process.stdout.write(JSON.stringify(redact(data, opts), null, 2) + '\n');
+      return 0;
+    }
+
+    if (csvMode) {
+      process.stdout.write(redactCsv(raw, opts) + '\n');
+      return 0;
+    }
+
+    process.stdout.write(redact(raw, opts));
     return 0;
+  } catch (e) {
+    process.stderr.write(`${(e as Error).message}\n`);
+    return 2;
   }
-
-  if (csvMode) {
-    process.stdout.write(redactCsv(raw, opts) + '\n');
-    return 0;
-  }
-
-  process.stdout.write(redact(raw, opts));
-  return 0;
 }
 
 const PARSE_ERROR = Symbol('parse-error');

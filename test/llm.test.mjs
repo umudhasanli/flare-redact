@@ -18,7 +18,7 @@ test('wrapOpenAI redacts the outgoing prompt and restores the reply', async () =
         create: async (params) => {
           seenByModel = params.messages[0].content;
           // the "model" references the placeholder it was given in its answer
-          const ph = seenByModel.match(/\[EMAIL_1\]/)[0];
+          const ph = seenByModel.match(/\[FR_EMAIL_[0-9a-f]{24}\]/)[0];
           return { choices: [{ message: { role: 'assistant', content: `sure, I'll email ${ph}` } }] };
         },
       },
@@ -30,7 +30,7 @@ test('wrapOpenAI redacts the outgoing prompt and restores the reply', async () =
     messages: [{ role: 'user', content: `write to ${EMAIL}` }],
   });
   assert.doesNotMatch(seenByModel, /alice@corp\.com/); // model never saw the real email
-  assert.match(seenByModel, /\[EMAIL_1\]/);
+  assert.match(seenByModel, /\[FR_EMAIL_[0-9a-f]{24}\]/);
   assert.equal(res.choices[0].message.content, `sure, I'll email ${EMAIL}`); // restored for the app
 });
 
@@ -39,7 +39,7 @@ test('wrapOpenAI restores across streamed chunks (placeholder split in two)', as
     chat: {
       completions: {
         create: async (params) => {
-          const ph = params.messages[0].content.match(/\[EMAIL_1\]/)[0];
+          const ph = params.messages[0].content.match(/\[FR_EMAIL_[0-9a-f]{24}\]/)[0];
           const pieces = ['mailing ', ph.slice(0, 4), ph.slice(4), ' now'];
           return (async function* () {
             for (const p of pieces) yield { choices: [{ index: 0, delta: { content: p } }] };
@@ -65,7 +65,7 @@ test('wrapAnthropic redacts messages and system, restores content blocks', async
       create: async (params) => {
         seenSystem = params.system;
         seenMsg = params.messages[0].content;
-        const ph = seenMsg.match(/\[EMAIL_1\]/)[0];
+        const ph = seenMsg.match(/\[FR_EMAIL_[0-9a-f]{24}\]/)[0];
         return { content: [{ type: 'text', text: `noted ${ph}` }] };
       },
     },

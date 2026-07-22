@@ -42,16 +42,17 @@ the built output in `dist/`, so build before you test.
 
 Most contributions are new detectors, so here's what I look at:
 
-- **A bounded pattern.** No nested quantifiers, nothing that can backtrack. Run
-  it against a long, adversarial string and confirm it stays fast. This isn't
-  negotiable — the whole point is that you can scan untrusted input safely.
+- **A bounded built-in pattern.** No backreferences, lookbehind, nested
+  quantifiers, or ambiguous unbounded branches. Extend the generated hostile
+  cases in `bench/adversarial-runtime.mjs` and measure scaling with
+  `npm run benchmark:adversarial`. Do not describe the JavaScript engine as
+  formally ReDoS-proof.
 - **A real `why`.** One plain sentence a person would actually understand, not a
   restatement of the label.
 - **A sensible `mask`.** Leave enough of a hint to stay debuggable where that's
   safe; hide everything where it isn't.
 - **Tests for both sides** — a string that should match, and a near-miss that
   should not. A false positive is as much a bug as a false negative.
-
 Anything that fires on ordinary text often enough to be noisy (IPs, phone
 numbers, and the like) should default to `false` and be opt-in.
 

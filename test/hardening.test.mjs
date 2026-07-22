@@ -3,12 +3,13 @@ import assert from 'node:assert/strict';
 import { createVault, restore } from '../dist/index.js';
 import { wrapOpenAI, wrapAnthropic } from '../dist/llm.js';
 
-test('restore is collision-safe: [EMAIL_1] is not clobbered by [EMAIL_10]', () => {
+test('opaque placeholders are unique and restore without collisions', () => {
   const v = createVault();
   const emails = Array.from({ length: 12 }, (_, i) => `user${i}@corp.com`);
   const redacted = v.redact(emails.join(' '));
-  assert.match(redacted, /\[EMAIL_10\]/);
-  assert.match(redacted, /\[EMAIL_1\]/);
+  const placeholders = redacted.match(/\[FR_EMAIL_[0-9a-f]{24}\]/g);
+  assert.equal(placeholders.length, 12);
+  assert.equal(new Set(placeholders).size, 12);
   assert.equal(v.restore(redacted), emails.join(' '));
 });
 
@@ -46,21 +47,23 @@ test('wrapOpenAI leaves null content and tool calls untouched', async () => {
   });
   assert.equal(sent[0].content, null);
   assert.deepEqual(sent[0].tool_calls, [{ id: 'x' }]);
-  assert.match(sent[1].content, /\[EMAIL_1\]/);
+  assert.match(sent[1].content, /\[FR_EMAIL_[0-9a-f]{24}\]/);
 });
 
 test('wrapOpenAI streaming restores a placeholder split at every boundary', async () => {
-  const reply = 'ok [EMAIL_1] done';
   const expected = 'ok alice@corp.com done';
-  for (let cut = 1; cut < reply.length; cut++) {
-    const pieces = [reply.slice(0, cut), reply.slice(cut)];
+  for (let cut = 1; cut < 38; cut++) {
     const client = {
       chat: {
         completions: {
-          create: async () =>
-            (async function* () {
+          create: async (params) => {
+            const ph = params.messages[0].content.match(/\[FR_EMAIL_[0-9a-f]{24}\]/)[0];
+            const reply = `ok ${ph} done`;
+            const pieces = [reply.slice(0, cut), reply.slice(cut)];
+            return (async function* () {
               for (const p of pieces) yield { choices: [{ index: 0, delta: { content: p } }] };
-            })(),
+            })();
+          },
         },
       },
     };
@@ -91,7 +94,7 @@ test('wrapAnthropic redacts a system prompt given as text blocks', async () => {
     messages: [{ role: 'user', content: 'hi' }],
   });
   assert.doesNotMatch(sentSystem[0].text, /root@corp\.com/);
-  assert.match(sentSystem[0].text, /\[EMAIL_1\]/);
+  assert.match(sentSystem[0].text, /\[FR_EMAIL_[0-9a-f]{24}\]/);
 });
 
 test('vault restore round-trips a deeply nested object', () => {

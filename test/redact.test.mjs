@@ -91,12 +91,13 @@ test('label mode', () => {
 });
 
 test('hash mode is deterministic and correlates equal values', () => {
-  const a = redact('bob@x.io', { mode: 'hash' });
-  const b = redact('bob@x.io', { mode: 'hash' });
+  const a = redact('bob@x.io', { mode: 'hash', transformSecret: 'service-a-secret' });
+  const b = redact('bob@x.io', { mode: 'hash', transformSecret: 'service-a-secret' });
   assert.equal(a, b);
-  assert.match(a, /^email_[0-9a-f]{8}$/);
-  assert.notEqual(a, redact('alice@x.io', { mode: 'hash' }));
-  assert.notEqual(a, redact('bob@x.io', { mode: 'hash', hashSalt: 'pepper' }));
+  assert.match(a, /^email_[0-9a-f]{32}$/);
+  assert.notEqual(a, redact('alice@x.io', { mode: 'hash', transformSecret: 'service-a-secret' }));
+  assert.notEqual(a, redact('bob@x.io', { mode: 'hash', transformSecret: 'service-b-secret' }));
+  assert.throws(() => redact('bob@x.io', { mode: 'hash' }), /transformSecret/);
 });
 
 test('allow list keeps known-safe values', () => {

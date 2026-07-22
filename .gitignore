@@ -5,3 +5,8 @@ dist/
 npm-debug.log*
 .env
 .env.*
+
+# Local research and paper artifacts
+research/
+bench/adapters/
+bench/evaluate.mjs
