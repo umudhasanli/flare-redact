@@ -62,6 +62,7 @@ Nothing to configure. No list of field paths to maintain. No native build step.
 ## Contents
 
 - [Install](#install)
+- [Runnable examples](#runnable-examples)
 - [Redact anything](#redact-anything)
 - [Redact prompts before they reach an LLM](#redact-prompts-before-they-reach-an-llm)
 - [Ways to hide a value](#ways-to-hide-a-value)
@@ -93,6 +94,18 @@ npm install flare-redact
 Node 20+, and it runs in the browser and edge runtimes too — zero dependencies.
 Upgrading from 0.8? Read the [`0.9 migration notes`](CHANGELOG.md#090--2026-07-23)
 before changing protected transform or vault behavior.
+
+## Runnable examples
+
+Clone the repository and run these small applications locally:
+
+| Example | What it proves | Run |
+|---|---|---|
+| [`openai-privacy`](examples/openai-privacy) | The model sees an opaque placeholder while the app receives the restored value | `npm --prefix examples/openai-privacy start` |
+| [`express-pino`](examples/express-pino) | Express keeps the original request while Pino receives a safe snapshot | `npm --prefix examples/express-pino run smoke` |
+| [`github-secret-scan`](examples/github-secret-scan) | Pull requests fail when tracked source or configuration files contain detected secrets or PII | Copy the workflow into your repository |
+
+Run `npm run build` and install an example's dependencies before its first run.
 
 ## Redact anything
 
@@ -481,8 +494,25 @@ it into CI or a pre-commit hook. File scans report `file:line:column`, while
 machine-readable JSON and SARIF reports never echo the matched secret value:
 
 ```yaml
-- run: git ls-files '*.env*' '*.log' '*.json' | xargs npx flare-redact --scan
+- uses: actions/checkout@v5
+- uses: actions/setup-node@v5
+  with:
+    node-version: 24
+- name: Scan tracked text files
+  shell: bash
+  run: |
+    git ls-files -z -- \
+      '*.env*' '*.log' '*.json' '*.jsonl' '*.yaml' '*.yml' \
+      '*.toml' '*.ini' '*.conf' '*.js' '*.mjs' '*.cjs' \
+      '*.ts' '*.tsx' '*.jsx' \
+      ':(exclude)**/package-lock.json' \
+      | while IFS= read -r -d '' file; do printf './%s\0' "$file"; done \
+      | xargs -0 -r npx --yes --package flare-redact@0.9.0 flare-redact --scan
 ```
+
+The scan runs on the GitHub runner, reports safe file and source locations, and
+fails without sending repository contents to an external scanning service. A
+copy-ready workflow lives in [`examples/github-secret-scan`](examples/github-secret-scan).
 
 ```bash
 flare-redact --scan --format json .env app.log > flare-redact.json

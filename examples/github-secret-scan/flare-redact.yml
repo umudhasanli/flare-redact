@@ -1,0 +1,28 @@
+name: Flare Redact
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - name: Scan tracked text files
+        shell: bash
+        run: |
+          git ls-files -z -- \
+            '*.env*' '*.log' '*.json' '*.jsonl' '*.yaml' '*.yml' \
+            '*.toml' '*.ini' '*.conf' '*.js' '*.mjs' '*.cjs' \
+            '*.ts' '*.tsx' '*.jsx' \
+            ':(exclude)**/package-lock.json' \
+            | while IFS= read -r -d '' file; do printf './%s\0' "$file"; done \
+            | xargs -0 -r npx --yes --package flare-redact@0.9.0 flare-redact --scan

@@ -1,0 +1,14 @@
+{
+  "name": "flare-redact-example-express-pino",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "smoke": "node smoke.mjs"
+  },
+  "dependencies": {
+    "express": "^5.2.1",
+    "flare-redact": "file:../..",
+    "pino": "^10.3.1"
+  }
+}

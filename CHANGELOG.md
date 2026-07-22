@@ -27,6 +27,8 @@
 - Change scan JSON to schema version 2.
 - Make line/column calculation linear in input plus findings instead of rescanning
   the prefix for every finding.
+- Add runnable OpenAI-compatible, Express + Pino, and copy-ready GitHub Actions
+  CLI scan examples.
 
 ### Migration
 

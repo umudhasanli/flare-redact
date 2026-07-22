@@ -24,6 +24,14 @@ jobs:
       - run: npm test
       - if: matrix.node == 24
         run: npm run benchmark:adversarial
+      - if: matrix.node == 24
+        run: npm --prefix examples/openai-privacy install
+      - if: matrix.node == 24
+        run: npm --prefix examples/openai-privacy start
+      - if: matrix.node == 24
+        run: npm --prefix examples/express-pino install
+      - if: matrix.node == 24
+        run: npm --prefix examples/express-pino run smoke
 
   publish:
     name: Publish npm
