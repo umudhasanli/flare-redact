@@ -11,7 +11,7 @@ issue before you write code — it saves us both time.
 
 - Everything lands through a pull request. Nothing goes straight to `main`,
   mine included.
-- A PR needs a green CI run and my review before it merges. I read every one.
+- A PR needs a green CI run and a code-owner review before it merges. We read every one.
   If it's been sitting for a few days, a ping is fair.
 - One idea per PR. A focused diff is far easier to reason about — and to trust —
   than five unrelated ones.
