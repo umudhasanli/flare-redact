@@ -15,7 +15,14 @@ import {
 } from './index.js';
 import { redactCsv } from './csv.js';
 
-const VERSION = '1.0.0';
+const VERSION: string = (() => {
+  try {
+    const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version?: string };
+    return pkg.version ?? '0.0.0';
+  } catch {
+    return '0.0.0';
+  }
+})();
 type ScanFormat = 'pretty' | 'json' | 'sarif';
 
 const HELP = `flare-redact — hide secrets & PII before they hit a log
@@ -31,9 +38,14 @@ OPTIONS
   --json            parse input as JSON and redact recursively
   --csv             parse input as CSV and redact every cell
   --mode <m>        mask | label | hash | pseudonym | surrogate
+                    (fpe is a deprecated alias for pseudonym)
   --secret-env <n>  read the transform key from env var <n>
                     (default: FLARE_REDACT_SECRET)
   --hash-salt <s>   deprecated; prefer --secret-env
+  --min-confidence <n>
+                    drop findings below this confidence (0-1)
+  --include-values  include raw matched values in --scan output
+                    (unsafe for logs and reports)
   --only <ids>      use only these detectors (comma-separated)
   --enable <ids>    turn on extra detectors (e.g. ipv4,high_entropy)
   --disable <ids>   turn off detectors (e.g. email)
@@ -119,6 +131,8 @@ function parseArgs(argv: string[]): ParsedArgs {
       case '--mask': opts.mask = argv[++i]; break;
       case '--mode': opts.mode = parseMode(argv[++i]); break;
       case '--hash-salt': opts.hashSalt = argv[++i]; break;
+      case '--min-confidence': opts.minConfidence = parseConfidence(argv[++i]); break;
+      case '--include-values': opts.includeValues = true; break;
       case '--secret-env': secretEnv = envName(argv[++i], '--secret-env'); break;
       case '--term': { const w = argv[++i]; if (w) terms.push(w); break; }
       case '--terms': {
@@ -160,6 +174,14 @@ function envName(value: string | undefined, flag: string): string {
     throw new Error(`${flag} requires a valid environment-variable name`);
   }
   return value;
+}
+
+function parseConfidence(value: string | undefined): number {
+  const n = Number(value);
+  if (value === undefined || Number.isNaN(n) || n < 0 || n > 1) {
+    throw new Error(`--min-confidence requires a number between 0 and 1, got: ${value ?? '(missing)'}`);
+  }
+  return n;
 }
 
 function parseScanFormat(value: string | undefined): ScanFormat {
@@ -204,18 +226,19 @@ function formatFindings(findings: LocatedFinding[]): string {
   const lines = findings.map((f) => {
     const location = findingLocation(f);
     const where = location ? `\n   at ${location}` : '';
-    return `⚠  ${f.label} (${f.detector}) [${f.risk}, ${(f.confidence * 100).toFixed(0)}%]${where}\n   ${f.why}`;
+    const value = f.value !== undefined ? `\n   value: ${f.value}` : '';
+    return `⚠  ${f.label} (${f.detector}) [${f.risk}, ${(f.confidence * 100).toFixed(0)}%]${where}${value}\n   ${f.why}`;
   });
   const noun = findings.length === 1 ? 'finding' : 'findings';
   return `${findings.length} ${noun}:\n\n${lines.join('\n\n')}`;
 }
 
-function formatJson(findings: LocatedFinding[], scannedFiles: string[]): string {
+function formatJson(findings: LocatedFinding[], scannedFiles: string[], includeValues: boolean): string {
   return JSON.stringify({
     schemaVersion: 2,
     tool: { name: 'flare-redact', version: VERSION },
     summary: { total: findings.length, filesScanned: scannedFiles.length },
-    findings: findings.map(reportFinding),
+    findings: includeValues ? findings : findings.map(reportFinding),
   }, null, 2);
 }
 
@@ -265,7 +288,7 @@ function runScan(files: string[], jsonMode: boolean, opts: RedactOptions, format
   }
 
   const out = format === 'json'
-    ? formatJson(findings, files)
+    ? formatJson(findings, files, opts.includeValues === true)
     : format === 'sarif'
       ? formatSarif(findings)
       : formatFindings(findings);

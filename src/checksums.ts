@@ -156,6 +156,77 @@ export function ssnValid(value: string): boolean {
   return group !== 0 && serial !== 0;
 }
 
+/** France NIR (INSEE) — 13 digits + 2-digit key, key = 97 − (number mod 97). */
+export function frNirValid(value: string): boolean {
+  const nir = value.replace(/[\s.-]/g, '').toUpperCase();
+  const m = nir.match(/^([12]\d{4})(\d{2}|2[AB])(\d{6})(\d{2})$/);
+  if (!m) return false;
+  // Corsican departments: 2A → 19, 2B → 18 before the modulo.
+  const dept = m[2] === '2A' ? '19' : m[2] === '2B' ? '18' : m[2]!;
+  const n = Number(m[1]! + dept + m[3]!);
+  const key = 97 - (n % 97);
+  return key === Number(m[4]);
+}
+
+const VERHOEFF_D = [
+  [0, 1, 2, 3, 4, 5, 6, 7, 8, 9], [1, 2, 3, 4, 0, 6, 7, 8, 9, 5],
+  [2, 3, 4, 0, 1, 7, 8, 9, 5, 6], [3, 4, 0, 1, 2, 8, 9, 5, 6, 7],
+  [4, 0, 1, 2, 3, 9, 5, 6, 7, 8], [5, 9, 8, 7, 6, 0, 4, 3, 2, 1],
+  [6, 5, 9, 8, 7, 1, 0, 4, 3, 2], [7, 6, 5, 9, 8, 2, 1, 0, 4, 3],
+  [8, 7, 6, 5, 9, 3, 2, 1, 0, 4], [9, 8, 7, 6, 5, 4, 3, 2, 1, 0],
+];
+const VERHOEFF_P = [
+  [0, 1, 2, 3, 4, 5, 6, 7, 8, 9], [1, 5, 7, 6, 2, 8, 3, 0, 9, 4],
+  [5, 8, 0, 3, 7, 9, 6, 1, 4, 2], [8, 9, 1, 6, 0, 4, 3, 5, 2, 7],
+  [9, 4, 5, 3, 1, 2, 6, 8, 7, 0], [4, 2, 8, 6, 5, 7, 3, 9, 0, 1],
+  [2, 7, 9, 3, 8, 0, 6, 4, 1, 5], [7, 0, 4, 6, 9, 1, 3, 2, 5, 8],
+];
+/** India Aadhaar — 12 digits, Verhoeff checksum, first digit 2–9. */
+export function aadhaarValid(value: string): boolean {
+  const d = onlyDigits(value);
+  if (d.length !== 12 || d[0] === '0' || d[0] === '1') return false;
+  let c = 0;
+  for (let i = 0; i < 12; i++) {
+    c = VERHOEFF_D[c]![VERHOEFF_P[i % 8]![Number(d[11 - i])]!]!;
+  }
+  return c === 0;
+}
+
+const TFN_WEIGHTS = [1, 4, 3, 7, 5, 8, 6, 9, 10];
+/** Australia TFN — 9 digits, weighted sum divisible by 11. */
+export function tfnValid(value: string): boolean {
+  const d = onlyDigits(value);
+  if (d.length !== 9 || /^(\d)\1{8}$/.test(d)) return false;
+  let sum = 0;
+  for (let i = 0; i < 9; i++) sum += Number(d[i]) * TFN_WEIGHTS[i]!;
+  return sum % 11 === 0;
+}
+
+const CN_ID_WEIGHTS = [7, 9, 10, 5, 8, 4, 2, 1, 6, 3, 7, 9, 10, 5, 8, 4, 2];
+const CN_ID_CHECK = '10X98765432';
+/** China resident ID — 18 chars, ISO 7064 MOD 11-2 check character. */
+export function cnResidentIdValid(value: string): boolean {
+  const id = value.toUpperCase();
+  if (!/^[1-9]\d{5}(?:19|20)\d{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])\d{3}[\dX]$/.test(id)) return false;
+  let sum = 0;
+  for (let i = 0; i < 17; i++) sum += Number(id[i]) * CN_ID_WEIGHTS[i]!;
+  return CN_ID_CHECK[sum % 11] === id[17];
+}
+
+/** Japan My Number — 12 digits, weighted mod-11 check digit. */
+export function jpMyNumberValid(value: string): boolean {
+  const d = onlyDigits(value);
+  if (d.length !== 12) return false;
+  let sum = 0;
+  for (let n = 1; n <= 11; n++) {
+    const digit = Number(d[11 - n]);
+    sum += digit * (n <= 6 ? n + 1 : n - 5);
+  }
+  const r = sum % 11;
+  const check = r <= 1 ? 0 : 11 - r;
+  return check === Number(d[11]);
+}
+
 const CF_ODD: Record<string, number> = {
   '0': 1, '1': 0, '2': 5, '3': 7, '4': 9, '5': 13, '6': 15, '7': 17, '8': 19, '9': 21,
   A: 1, B: 0, C: 5, D: 7, E: 9, F: 13, G: 15, H: 17, I: 19, J: 21, K: 2, L: 4, M: 18,

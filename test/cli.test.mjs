@@ -91,6 +91,34 @@ test('CLI vault persistence is encrypted and round-trips', () => {
   }
 });
 
+test('--version reflects the package.json version', () => {
+  const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+  const result = run(['--version']);
+  assert.equal(result.status, 0);
+  assert.equal(result.stdout.trim(), pkg.version);
+});
+
+test('--min-confidence filters findings and rejects invalid values', () => {
+  const kept = run(['--scan', '--format', 'json'], { input: `token ${githubToken}` });
+  assert.equal(JSON.parse(kept.stdout).summary.total >= 1, true);
+  const filtered = run(['--scan', '--format', 'json', '--min-confidence', '1'], { input: `token ${githubToken}` });
+  assert.equal(filtered.status, 0);
+  assert.equal(JSON.parse(filtered.stdout).summary.total, 0);
+  const invalid = run(['--scan', '--min-confidence', '2'], { input: 'x' });
+  assert.equal(invalid.status, 2);
+  assert.match(invalid.stderr, /--min-confidence/);
+});
+
+test('--include-values opts scan output into raw values', () => {
+  const safe = run(['--scan', '--format', 'json'], { input: githubToken });
+  assert.equal(safe.stdout.includes(githubToken), false);
+  const unsafe = run(['--scan', '--format', 'json', '--include-values'], { input: githubToken });
+  assert.equal(unsafe.status, 1);
+  assert.equal(JSON.parse(unsafe.stdout).findings[0].value, githubToken);
+  const pretty = run(['--scan', '--include-values'], { input: githubToken });
+  assert.ok(pretty.stdout.includes(`value: ${githubToken}`));
+});
+
 test('CLI protected transforms require a secret environment variable', () => {
   const missing = run(['--mode', 'hash'], { input: 'alice@corp.com', env: { FLARE_REDACT_SECRET: '' } });
   assert.equal(missing.status, 2);

@@ -1,5 +1,50 @@
 # Changelog
 
+## 1.1.0 — 2026-07-23
+
+### Detection
+
+- Catch AWS **secret** access keys, not just `AKIA…` key IDs: the new
+  contextual `aws_secret_key` detector matches 40-character secrets in
+  assignments (`AWS_SECRET_ACCESS_KEY=…`, `aws_secret_key: …`,
+  `"secretAccessKey": "…"`) in env, YAML, and JSON form, and wins overlap
+  resolution against the generic assignment detector. A bare 40-character
+  string with no context is never flagged.
+- Add 19 service detectors with distinctive low-false-positive formats, all on
+  by default: `openrouter_key`, `huggingface_token`, `groq_key`, `xai_key`,
+  `perplexity_key`, `replicate_token`, `vault_token` (HashiCorp),
+  `databricks_token`, `airtable_pat`, `postman_key`, `linear_key`,
+  `figma_token`, `notion_token`, `doppler_token`, `supabase_key`,
+  `netlify_token`, `stripe_webhook_secret`, `mailgun_key`, and
+  `discord_webhook` URLs.
+- Exclude `sk-or-…` (OpenRouter) from the `openai_key` pattern so OpenRouter
+  keys are labeled correctly.
+
+### National IDs
+
+- Add five checksum-validated, opt-in national identifiers: France NIR
+  (`fr_nir`, INSEE mod-97 key with Corsican 2A/2B departments), India Aadhaar
+  (`in_aadhaar`, Verhoeff), Australia TFN (`au_tfn`, weighted mod-11), China
+  resident ID (`cn_resident_id`, ISO 7064 mod-11,2 with birth-date check), and
+  Japan My Number (`jp_my_number`, weighted mod-11). Enable by country tag
+  (`enable: ['fr']`) or all at once (`enable: ['pii']`).
+
+### CLI
+
+- Add `--min-confidence <0-1>` to drop low-confidence findings from any output.
+- Add `--include-values` to opt scan reports into raw matched values
+  (previously only available via the library API).
+- `--version` now reads the real package version instead of a hard-coded
+  string, and `--help` documents `fpe` as a deprecated alias of `pseudonym`.
+
+### Verification
+
+- Checksum vectors for the five new national IDs are cross-checked against
+  independently computed known-answer examples (including the documented
+  NIR, resident-ID, and My Number samples). Every new service detector has a
+  detection, labeling, and masking test. The suite grows from 139 to 153
+  tests.
+
 ## 1.0.1 — 2026-07-23
 
 ### Fixed

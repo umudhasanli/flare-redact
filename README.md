@@ -566,6 +566,7 @@ flare-redact --scan --format json .env app.log # safe machine-readable report
 flare-redact --sarif .env > results.sarif    # GitHub code-scanning report
 flare-redact --summary --json < event.json   # counts per detector
 flare-redact --enable high_entropy < app.log # also catch unknown-format keys
+flare-redact --scan --min-confidence 0.9 .env  # only high-confidence findings
 flare-redact --list                          # show every detector
 ```
 
@@ -577,6 +578,7 @@ On by default:
 |---|---|
 | `private_key` | PEM private key blocks (RSA/EC/OpenSSH/PGP) |
 | `aws_access_key` | AWS access key IDs (`AKIA…`, `ASIA…`) |
+| `aws_secret_key` | AWS secret access keys in assignments (`aws_secret_access_key=…`, `"secretAccessKey": …`) |
 | `github_token` | GitHub PATs and OAuth tokens (`ghp_…`, `github_pat_…`) |
 | `gitlab_token` | GitLab PATs (`glpat-…`) |
 | `slack_token` | Slack tokens (`xoxb-…`) |
@@ -596,10 +598,13 @@ On by default:
 | `obfuscated_email` | bracket-obfuscated emails such as `name [at] host [dot] tld` |
 | `credit_card` | card numbers (Luhn-validated) |
 | `iban` | IBANs (mod-97 validated) |
-| `discord_bot_token` / `telegram_bot_token` | chat bot tokens |
-| `shopify_token` / `square_token` | commerce tokens |
-| `digitalocean_token` / `azure_storage_key` | cloud secrets |
+| `openrouter_key` / `huggingface_token` / `groq_key` / `xai_key` / `perplexity_key` / `replicate_token` | more AI provider keys |
+| `discord_bot_token` / `discord_webhook` / `telegram_bot_token` | chat tokens and webhook URLs |
+| `shopify_token` / `square_token` / `stripe_webhook_secret` | commerce secrets |
+| `digitalocean_token` / `azure_storage_key` / `vault_token` / `databricks_token` | cloud & infra secrets |
 | `sentry_dsn` / `new_relic_key` | observability secrets |
+| `airtable_pat` / `postman_key` / `linear_key` / `figma_token` / `notion_token` | SaaS workspace tokens |
+| `doppler_token` / `supabase_key` / `netlify_token` / `mailgun_key` | platform API keys |
 
 Opt in with `enable`:
 
@@ -654,6 +659,11 @@ redact(text, { enable: ['tr', 'de'] });   // just Turkish and German
 | `ca_sin` | 🇨🇦 Canada | Luhn |
 | `us_ssn` | 🇺🇸 United States | issued-range rules |
 | `uk_nhs` | 🇬🇧 United Kingdom (NHS) | weighted mod-11 |
+| `fr_nir` | 🇫🇷 France (NIR) | INSEE mod-97 key |
+| `in_aadhaar` | 🇮🇳 India (Aadhaar) | Verhoeff |
+| `au_tfn` | 🇦🇺 Australia (TFN) | weighted mod-11 |
+| `cn_resident_id` | 🇨🇳 China | ISO 7064 mod-11,2 |
+| `jp_my_number` | 🇯🇵 Japan (My Number) | weighted mod-11 |
 
 Every algorithm has its own tests against known-valid and known-invalid numbers,
 so enabling them won't turn your logs into a wall of `[REDACTED]`.
