@@ -27,7 +27,7 @@ they're me making sure it's right.
 You'll need Node 18 or newer.
 
 ```sh
-git clone https://github.com/umudhasanli/flare-redact
+git clone https://github.com/flare-collection/flare-redact
 cd flare-redact
 npm install
 npm run build

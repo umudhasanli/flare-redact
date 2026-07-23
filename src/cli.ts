@@ -266,7 +266,7 @@ function formatSarif(findings: LocatedFinding[]): string {
     version: '2.1.0',
     $schema: 'https://json.schemastore.org/sarif-2.1.0.json',
     runs: [{
-      tool: { driver: { name: 'flare-redact', version: VERSION, informationUri: 'https://github.com/umudhasanli/flare-redact', rules } },
+      tool: { driver: { name: 'flare-redact', version: VERSION, informationUri: 'https://github.com/flare-collection/flare-redact', rules } },
       results,
     }],
   }, null, 2);

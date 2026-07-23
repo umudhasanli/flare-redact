@@ -6,7 +6,7 @@ or another security impact, report it privately instead of opening a public
 issue. Use synthetic or revoked values in the reproduction.
 
 Use GitHub's private advisory form:
-**[Report a vulnerability](https://github.com/umudhasanli/flare-redact/security/advisories/new)**
+**[Report a vulnerability](https://github.com/flare-collection/flare-redact/security/advisories/new)**
 
 I'll acknowledge within a few days and keep you in the loop on a fix. Once it's
 patched and released, I'm glad to credit you — unless you'd rather stay

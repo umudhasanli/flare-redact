@@ -143,11 +143,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/umudhasanli/flare-redact.git"
+    "url": "git+https://github.com/flare-collection/flare-redact.git"
   },
-  "homepage": "https://github.com/umudhasanli/flare-redact#readme",
+  "homepage": "https://github.com/flare-collection/flare-redact#readme",
   "bugs": {
-    "url": "https://github.com/umudhasanli/flare-redact/issues"
+    "url": "https://github.com/flare-collection/flare-redact/issues"
   },
   "engines": {
     "node": ">=20"

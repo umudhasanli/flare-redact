@@ -10,7 +10,7 @@
 
 <p align="center">
   <a href="https://www.npmjs.com/package/flare-redact"><img src="https://img.shields.io/npm/v/flare-redact.svg" alt="npm"></a>
-  <a href="https://github.com/umudhasanli/flare-redact/actions/workflows/ci.yml"><img src="https://github.com/umudhasanli/flare-redact/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/flare-collection/flare-redact/actions/workflows/ci.yml"><img src="https://github.com/flare-collection/flare-redact/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License"></a>
   <img src="https://img.shields.io/npm/types/flare-redact.svg" alt="TypeScript">
   <img src="https://img.shields.io/badge/dependencies-0-brightgreen" alt="Zero dependencies">

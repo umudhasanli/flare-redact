@@ -44,6 +44,8 @@
   NIR, resident-ID, and My Number samples). Every new service detector has a
   detection, labeling, and masking test. The suite grows from 139 to 153
   tests.
+- Update repository metadata after the move to the `flare-collection`
+  organization so npm provenance can verify automated releases.
 
 ## 1.0.1 — 2026-07-23
 
