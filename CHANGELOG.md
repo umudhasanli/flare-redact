@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.0.1 — 2026-07-23
+
+### Fixed
+
+- Label Anthropic API keys (`sk-ant-…`) with a dedicated `anthropic_key`
+  detector instead of reporting them as OpenAI keys. Masks now keep the
+  identifying `sk-ant-` prefix; `openai_key` no longer matches `sk-ant-`
+  values.
+
+### Verification
+
+- Verify the zero-dependency SHA-256 and HMAC-SHA-256 implementations against
+  the FIPS 180-4 and RFC 4231 known-answer vectors, differentially against
+  `node:crypto` across key and block-size boundaries, and pin down
+  `deriveBytes` counter-mode derivation and `hmacFingerprint` truncation.
+  The suite grows from 129 to 139 tests.
+
 ## 1.0.0 — 2026-07-23
 
 ### Production boundaries

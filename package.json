@@ -1,6 +1,6 @@
 {
   "name": "flare-redact",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Local, zero-dependency secret and PII redaction with contextual findings, secure reversible vaults, and LLM adapters.",
   "type": "module",
   "sideEffects": false,

@@ -20,6 +20,21 @@ test('redacts a JWT and a bearer header', () => {
   assert.equal(redact('Authorization: Bearer ' + jwt), 'Authorization: Bearer ***');
 });
 
+test('labels Anthropic keys as anthropic_key, not openai_key', () => {
+  const anthropic = 'sk-ant-api03-' + 'a1B2'.repeat(23) + 'A';
+  const [finding] = scan(`key=${anthropic}`);
+  assert.equal(finding.detector, 'anthropic_key');
+  assert.equal(redact(`key=${anthropic}`), 'key=sk-ant-***');
+});
+
+test('still labels OpenAI keys as openai_key', () => {
+  for (const key of ['sk-' + 'x'.repeat(48), 'sk-proj-' + 'y'.repeat(48)]) {
+    const [finding] = scan(`key=${key}`);
+    assert.equal(finding.detector, 'openai_key');
+    assert.equal(redact(`key=${key}`), 'key=sk-***');
+  }
+});
+
 test('redacts a private key block whole', () => {
   const pem = '-----BEGIN RSA PRIVATE KEY-----\nMIIBOgIBAAJBAKj\n-----END RSA PRIVATE KEY-----';
   assert.equal(redact(pem), '[REDACTED PRIVATE KEY]');
