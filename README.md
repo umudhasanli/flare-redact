@@ -68,6 +68,7 @@ Nothing to configure. No list of field paths to maintain. No native build step.
 - [Ways to hide a value](#ways-to-hide-a-value)
 - [Reversible redaction](#reversible-redaction)
 - [Contextual and model-assisted PII](#contextual-and-model-assisted-pii)
+- [Learned confidence, fewer false positives](#learned-confidence-fewer-false-positives)
 - [Build a private chat app](#build-a-private-chat-app)
 - [Protect tool calls and MCP loops](#protect-tool-calls-and-mcp-loops)
 - [Your own words](#your-own-words)
@@ -286,6 +287,41 @@ const safe = await redactAsync(input, policy);
 Semantic and deterministic spans enter the same overlap arbitration. Higher-risk,
 higher-priority, and better-validated findings win instead of whichever regular
 expression happens to run first.
+
+## Learned confidence, fewer false positives
+
+Generic, format-agnostic detectors such as `high_entropy` catch unknown-format
+keys, but they also fire on benign high-entropy strings: UUIDs, git SHAs, digests,
+object ids, and slugs. `refineConfidence` runs a small learned classifier over
+each match to tell real secrets from look-alikes, then nudges the confidence
+score. Pair it with `minConfidence` to drop the noise.
+
+```js
+const noisy = 'id 9fceb02d0ae598e95dc970b74767f19372d61af8 tok Zx9Kq2Lm7Pv4Rt6Wy8Bn3Cf5Hj1Dg0As7Uv';
+
+scan(noisy, { enable: ['high_entropy'] });
+// git SHA and the unknown-format token both flagged at a flat 60%
+
+scan(noisy, { enable: ['high_entropy'], refineConfidence: true, minConfidence: 0.5 });
+// the SHA is gone; the token survives (refined up to 80%)
+```
+
+The classifier is logistic regression over cheap character features (entropy,
+character-class mix, structure, and nearby labels like `api_key=` or `commit`).
+It is trained offline by [`scripts/train-confidence-model.mjs`](scripts/train-confidence-model.mjs)
+and shipped as fixed weights, so the runtime stays zero-dependency, synchronous,
+and deterministic — no model download, no native add-on, safe on edge and in the
+browser. Only detectors marked `refine` are touched; checksum-validated ones
+(cards, IBANs, national ids) are always left alone.
+
+Score a string yourself from `flare-redact` or the `flare-redact/ml` subpath:
+
+```js
+import { secretProbability } from 'flare-redact/ml';
+
+secretProbability('Zx9Kq2Lm7Pv4Rt6Wy8Bn3Cf5Hj1Dg0As7Uv', 'authorization: Bearer …'); // ~1.00
+secretProbability('9fceb02d0ae598e95dc970b74767f19372d61af8', 'commit …'); // ~0.00
+```
 
 ## Build a private chat app
 
@@ -567,6 +603,7 @@ flare-redact --sarif .env > results.sarif    # GitHub code-scanning report
 flare-redact --summary --json < event.json   # counts per detector
 flare-redact --enable high_entropy < app.log # also catch unknown-format keys
 flare-redact --scan --min-confidence 0.9 .env  # only high-confidence findings
+flare-redact --enable high_entropy --refine-confidence --min-confidence 0.5 < app.log # drop UUID/SHA noise
 flare-redact --list                          # show every detector
 ```
 
@@ -715,6 +752,10 @@ httpRedactor(opts?)      // 'flare-redact/http'    → Express/Connect middlewar
 redactCsv(text, opts?)   // 'flare-redact/csv'     → anonymize a CSV dataset
 wrapFetch(fetch, opts?)  // 'flare-redact/fetch'   → redact egress to named hosts
 
+// from 'flare-redact/ml'
+secretProbability(value, context?): number      // learned secret-vs-look-alike score, 0..1
+extractFeatures(value, context?): number[]      // the raw feature vector
+
 // from 'flare-redact/llm'
 wrapOpenAI(client, opts?)                       // scrub prompts, restore replies (+streaming)
 wrapAnthropic(client, opts?)                    // same for messages.create + system
@@ -731,7 +772,7 @@ redactStream(opts?): Transform                  // chunk-safe + bounded multilin
 // {
 //   only?, enable?, disable?, custom?,   // which detectors run
 //   mode?: 'mask' | 'label' | 'hash' | 'pseudonym' | 'surrogate',
-//   transformSecret?, mask?, minConfidence?, semanticProvider?, limits?,
+//   transformSecret?, mask?, minConfidence?, refineConfidence?, semanticProvider?, limits?,
 //   includeValues?: boolean,                // scan only; unsafe raw values
 //   redactKeys?: boolean | RegExp | string[],
 //   allow?: RegExp | string[],

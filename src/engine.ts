@@ -3,6 +3,7 @@ import { hmacFingerprint } from './crypto.js';
 import { pseudonymize, surrogate } from './transforms.js';
 import { MULTILANG_KEY_SET } from './i18n.js';
 import { buildTermsDetector, type TermSpec } from './terms.js';
+import { secretProbability } from './ml.js';
 
 export type Mode = 'mask' | 'label' | 'hash' | 'pseudonym' | 'surrogate' | 'fpe';
 export type Risk = 'low' | 'medium' | 'high' | 'critical';
@@ -62,6 +63,14 @@ export interface RedactOptions {
   semanticProvider?: SemanticProvider;
   /** Drop findings below this confidence (default: 0). */
   minConfidence?: number;
+  /**
+   * Let the learned classifier refine confidence for generic detectors that
+   * over-fire on benign high-entropy text (UUIDs, git SHAs, digests, slugs).
+   * Only detectors marked `refine` are affected; checksum-validated ones are
+   * left untouched. Pair with `minConfidence` to drop likely false positives.
+   * Default: false.
+   */
+  refineConfidence?: boolean;
   /** Include raw matched values in scan results. Unsafe for logs and reports. */
   includeValues?: boolean;
   limits?: {
@@ -207,7 +216,7 @@ export function scanString(
         : normalizedEnd;
       const value = text.slice(start, end);
       if (allow(value) || (value !== normalizedValue && allow(normalizedValue))) continue;
-      const confidence = scoreConfidence(det, text, start, end);
+      const confidence = scoreConfidence(det, text, start, end, opts);
       if (confidence < (opts.minConfidence ?? 0)) continue;
       hits.push({
         detector: det.id,
@@ -308,18 +317,33 @@ function detectorRisk(det: Detector): Risk {
   return 'high';
 }
 
-function scoreConfidence(det: Detector, text: string, start: number, end: number): number {
+/** How far the learned model can move a base confidence score, up or down. */
+const REFINE_STRENGTH = 0.4;
+
+function scoreConfidence(
+  det: Detector,
+  text: string,
+  start: number,
+  end: number,
+  opts: RedactOptions = {},
+): number {
   let score = det.confidence ?? (det.id === 'high_entropy' ? 0.6 : det.validate ? 0.99 : 0.92);
-  if (!det.context) return score;
-  const radius = det.context.window ?? 80;
-  const nearby = text.slice(Math.max(0, start - radius), Math.min(text.length, end + radius));
-  if (det.context.positive) {
-    det.context.positive.lastIndex = 0;
-    if (det.context.positive.test(nearby)) score += 0.06;
+  if (det.context) {
+    const radius = det.context.window ?? 80;
+    const nearby = text.slice(Math.max(0, start - radius), Math.min(text.length, end + radius));
+    if (det.context.positive) {
+      det.context.positive.lastIndex = 0;
+      if (det.context.positive.test(nearby)) score += 0.06;
+    }
+    if (det.context.negative) {
+      det.context.negative.lastIndex = 0;
+      if (det.context.negative.test(nearby)) score -= 0.25;
+    }
   }
-  if (det.context.negative) {
-    det.context.negative.lastIndex = 0;
-    if (det.context.negative.test(nearby)) score -= 0.25;
+  if (opts.refineConfidence && det.refine) {
+    const window = text.slice(Math.max(0, start - 64), Math.min(text.length, end + 64));
+    const p = secretProbability(text.slice(start, end), window);
+    score += (p - 0.5) * REFINE_STRENGTH;
   }
   return Math.max(0, Math.min(1, score));
 }

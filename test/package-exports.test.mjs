@@ -6,6 +6,7 @@ const entryPoints = [
   'index',
   'stream',
   'llm',
+  'ml',
   'tool',
   'session',
   'pino',

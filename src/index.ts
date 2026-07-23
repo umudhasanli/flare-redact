@@ -25,6 +25,15 @@ export {
   entropy,
   fnv1a,
 } from './detectors.js';
+export {
+  secretProbability,
+  extractFeatures,
+  shannonEntropy,
+  FEATURES,
+  FEATURE_COUNT,
+  CONFIDENCE_MODEL,
+  type ConfidenceModel,
+} from './ml.js';
 export { pseudonymize, surrogate, fpe } from './transforms.js';
 export { hmacFingerprint } from './crypto.js';
 export {
