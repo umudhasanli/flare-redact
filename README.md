@@ -581,6 +581,7 @@ On by default:
 | `gitlab_token` | GitLab PATs (`glpat-…`) |
 | `slack_token` | Slack tokens (`xoxb-…`) |
 | `stripe_key` | Stripe secret / restricted keys (`sk_live_…`, `rk_…`) |
+| `anthropic_key` | Anthropic API keys (`sk-ant-…`) |
 | `openai_key` | OpenAI API keys (`sk-…`) |
 | `google_api_key` | Google API keys (`AIza…`) |
 | `sendgrid_key` | SendGrid API keys (`SG.…`) |
