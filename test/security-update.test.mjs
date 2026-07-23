@@ -44,7 +44,7 @@ test('encrypted vault authenticates entries and rejects tampering', async () => 
 
 test('contextual detectors return only the sensitive capture', () => {
   const text = 'Customer name: Alice Example; address: 120 Cedar Street; DOB: 1990-04-23';
-  const findings = scan(text, { enable: ['contextual'] });
+  const findings = scan(text, { enable: ['contextual'], includeValues: true });
   assert.deepEqual(findings.map((finding) => finding.detector), ['person_name', 'street_address', 'date_of_birth']);
   assert.deepEqual(findings.map((finding) => finding.value), ['Alice Example', '120 Cedar Street', '1990-04-23']);
   assert.ok(findings.every((finding) => finding.risk === 'high' && finding.confidence >= 0.85));
@@ -82,7 +82,11 @@ test('async local semantic providers work without blocking the synchronous API c
 test('resource limits fail closed', () => {
   assert.throws(
     () => scan('alice@corp.com', { limits: { maxInputLength: 5 } }),
-    RedactionLimitError,
+    (error) => {
+      assert.equal(error instanceof RedactionLimitError, true);
+      assert.equal(error.code, 'ERR_REDACTION_LIMIT');
+      return true;
+    },
   );
   assert.throws(
     () => scan('a@x.io b@x.io', { limits: { maxFindings: 1 } }),
@@ -92,7 +96,7 @@ test('resource limits fail closed', () => {
 
 test('obfuscation normalization preserves exact original spans', () => {
   const token = 'ghp_' + 'a'.repeat(18) + '\u200b' + 'a'.repeat(18);
-  const [tokenFinding] = scan(token);
+  const [tokenFinding] = scan(token, { includeValues: true });
   assert.equal(tokenFinding.detector, 'github_token');
   assert.equal(tokenFinding.start, 0);
   assert.equal(tokenFinding.end, token.length);

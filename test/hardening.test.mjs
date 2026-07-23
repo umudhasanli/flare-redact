@@ -50,6 +50,75 @@ test('wrapOpenAI leaves null content and tool calls untouched', async () => {
   assert.match(sent[1].content, /\[FR_EMAIL_[0-9a-f]{24}\]/);
 });
 
+test('wrapOpenAI redacts secrets inside tool-call arguments in message history', async () => {
+  let sent;
+  const client = {
+    chat: {
+      completions: {
+        create: async (params) => {
+          sent = params.messages;
+          return { choices: [{ message: { role: 'assistant', content: 'ok' } }] };
+        },
+      },
+    },
+  };
+  wrapOpenAI(client, { placeholderStyle: 'readable' });
+  await client.chat.completions.create({
+    messages: [{
+      role: 'assistant',
+      content: null,
+      tool_calls: [{
+        id: 'call_1',
+        type: 'function',
+        function: {
+          name: 'send_email',
+          arguments: '{"email":"alice@corp.com","password":"hunter2"}',
+        },
+      }],
+    }],
+  });
+  const args = sent[0].tool_calls[0].function.arguments;
+  assert.doesNotMatch(args, /alice@corp|hunter2/);
+  assert.match(args, /\[EMAIL_1\]|\[GENERIC_ASSIGNMENT_1\]/);
+});
+
+test('wrapOpenAI restores placeholders split across streamed tool arguments', async () => {
+  const client = {
+    chat: {
+      completions: {
+        create: async (params) => {
+          const placeholder = params.messages[0].content.match(/<email:1>/)[0];
+          const json = `{"to":"${placeholder}"}`;
+          return (async function* () {
+            yield {
+              choices: [{
+                index: 0,
+                delta: { tool_calls: [{ index: 0, function: { arguments: json.slice(0, 10) } }] },
+              }],
+            };
+            yield {
+              choices: [{
+                index: 0,
+                delta: { tool_calls: [{ index: 0, function: { arguments: json.slice(10) } }] },
+              }],
+            };
+          })();
+        },
+      },
+    },
+  };
+  wrapOpenAI(client, { placeholder: (id, index) => `<${id}:${index}>` });
+  const stream = await client.chat.completions.create({
+    messages: [{ role: 'user', content: 'to alice@corp.com' }],
+    stream: true,
+  });
+  let args = '';
+  for await (const chunk of stream) {
+    args += chunk.choices?.[0]?.delta?.tool_calls?.[0]?.function?.arguments ?? '';
+  }
+  assert.equal(args, '{"to":"alice@corp.com"}');
+});
+
 test('wrapOpenAI streaming restores a placeholder split at every boundary', async () => {
   const expected = 'ok alice@corp.com done';
   for (let cut = 1; cut < 38; cut++) {

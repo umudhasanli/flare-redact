@@ -1,4 +1,4 @@
-import { createVault, buildRestore, type Vault, type VaultOptions } from './vault.js';
+import { createVault, buildStreamRestore, type Vault, type VaultOptions } from './vault.js';
 
 export interface SessionOptions extends VaultOptions {}
 
@@ -32,18 +32,6 @@ export interface Session {
   reset(): void;
 }
 
-function redactContent(content: unknown, vault: Vault): unknown {
-  if (typeof content === 'string') return vault.redact(content);
-  if (Array.isArray(content)) {
-    return content.map((part) =>
-      part && typeof part === 'object' && typeof (part as { text?: unknown }).text === 'string'
-        ? { ...part, text: vault.redact((part as { text: string }).text) }
-        : part,
-    );
-  }
-  return content;
-}
-
 /**
  * A conversation-scoped redactor for chat/AI apps. One session keeps one vault,
  * so the same value maps to the same placeholder across every turn — mask the
@@ -61,26 +49,9 @@ export function createSession(opts: SessionOptions = {}): Session {
   return {
     redact: <T>(input: T): T => vault.redact(input),
     restore: <T>(input: T): T => vault.restore(input),
-    redactMessages: <M extends ChatMessage>(messages: M[]): M[] =>
-      messages.map((m) => ({ ...m, content: redactContent(m.content, vault) })),
+    redactMessages: <M extends ChatMessage>(messages: M[]): M[] => vault.redact(messages),
     stream(): StreamRestorer {
-      const restore = buildRestore(vault.entries());
-      let buf = '';
-      return {
-        push(chunk: string): string {
-          buf += chunk;
-          const open = buf.lastIndexOf('[');
-          const emitEnd = open !== -1 && buf.indexOf(']', open) === -1 ? open : buf.length;
-          const emit = buf.slice(0, emitEnd);
-          buf = buf.slice(emitEnd);
-          return restore(emit);
-        },
-        flush(): string {
-          const out = restore(buf);
-          buf = '';
-          return out;
-        },
-      };
+      return buildStreamRestore(vault.entries());
     },
     get vault() {
       return vault;

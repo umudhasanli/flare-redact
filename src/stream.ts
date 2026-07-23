@@ -1,20 +1,85 @@
 import { Transform } from 'node:stream';
-import { redact, type RedactOptions } from './index.js';
+import { redact, RedactionLimitError, type RedactOptions } from './index.js';
 
-export function redactStream(opts: RedactOptions = {}): Transform {
+export interface RedactStreamOptions extends RedactOptions {
+  /** Maximum buffered multiline record size before the stream fails closed. */
+  maxRecordLength?: number;
+}
+
+const PEM_BEGIN = /-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP |ENCRYPTED )?PRIVATE KEY-----/;
+const PEM_END = /-----END (?:RSA |EC |DSA |OPENSSH |PGP |ENCRYPTED )?PRIVATE KEY-----/;
+
+export function redactStream(opts: RedactStreamOptions = {}): Transform {
   let carry = '';
-  const flushLines = (text: string, final: boolean): string => {
-    const parts = (carry + text).split('\n');
-    carry = final ? '' : parts.pop() ?? '';
-    return parts.map((line) => redact(line, opts)).join('\n');
+  let multiline = '';
+  const maxRecordLength = opts.maxRecordLength ?? opts.limits?.maxInputLength ?? 16 * 1024 * 1024;
+
+  const processLine = (line: string): string => {
+    if (multiline) {
+      multiline += line;
+      if (multiline.length > maxRecordLength) {
+        throw new RedactionLimitError(`Multiline stream record exceeds the configured limit of ${maxRecordLength}.`);
+      }
+      if (!PEM_END.test(line)) return '';
+      const out = redact(multiline, opts);
+      multiline = '';
+      return out;
+    }
+    if (PEM_BEGIN.test(line) && !PEM_END.test(line)) {
+      multiline = line;
+      return '';
+    }
+    return redact(line, opts);
   };
+
+  const processCompleteLines = (text: string): string => {
+    const data = carry + text;
+    const lastNewline = data.lastIndexOf('\n');
+    if (lastNewline === -1) {
+      carry = data;
+      return '';
+    }
+    carry = data.slice(lastNewline + 1);
+    const complete = data.slice(0, lastNewline + 1);
+    let out = '';
+    let start = 0;
+    for (let i = 0; i < complete.length; i++) {
+      if (complete.charCodeAt(i) !== 10) continue;
+      out += processLine(complete.slice(start, i + 1));
+      start = i + 1;
+    }
+    return out;
+  };
+
   return new Transform({
     transform(chunk, _enc, cb) {
-      const out = flushLines(chunk.toString(), false);
-      cb(null, out.length ? out + '\n' : '');
+      try {
+        cb(null, processCompleteLines(chunk.toString()));
+      } catch (error) {
+        cb(error as Error);
+      }
     },
     flush(cb) {
-      cb(null, carry ? redact(carry, opts) : '');
+      try {
+        const pending = multiline + carry;
+        if (!pending) {
+          cb(null, '');
+          return;
+        }
+        if (pending.length > maxRecordLength) {
+          throw new RedactionLimitError(`Multiline stream record exceeds the configured limit of ${maxRecordLength}.`);
+        }
+        const begin = pending.search(PEM_BEGIN);
+        const hasCompletePem = begin !== -1 && PEM_END.test(pending.slice(begin));
+        if (begin === -1 || hasCompletePem) {
+          cb(null, redact(pending, opts));
+          return;
+        }
+        const prefix = begin > 0 ? redact(pending.slice(0, begin), opts) : '';
+        cb(null, `${prefix}[REDACTED PRIVATE KEY]`);
+      } catch (error) {
+        cb(error as Error);
+      }
     },
   });
 }

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { redact, scan, isClean, summary, createRedactor, wrapConsole } from '../dist/index.js';
+import { redact, scan, isClean, summary, compilePolicy, createRedactor, wrapConsole } from '../dist/index.js';
 
 const gh = 'ghp_' + 'a'.repeat(36);
 
@@ -62,6 +62,14 @@ test('scan reports findings with a why, input unchanged', () => {
   assert.ok(ids.includes('email'));
   assert.ok(ids.includes('generic_assignment'));
   for (const f of findings) assert.ok(f.why.length > 0);
+  for (const f of findings) assert.equal(f.value, undefined);
+});
+
+test('scan includes raw values only when explicitly requested', () => {
+  const [safe] = scan('email bob@x.io', { only: ['email'] });
+  const [unsafe] = scan('email bob@x.io', { only: ['email'], includeValues: true });
+  assert.equal(safe.value, undefined);
+  assert.equal(unsafe.value, 'bob@x.io');
 });
 
 test('scan reports one-based line and column locations', () => {
@@ -130,6 +138,61 @@ test('createRedactor binds options', () => {
   const r = createRedactor({ disable: ['email'] });
   assert.equal(r.redact(`bob@x.io ${gh}`), 'bob@x.io ghp_***');
   assert.equal(r.isClean('bob@x.io'), true);
+});
+
+test('compilePolicy reuses a resolved policy and exposes async operations', async () => {
+  const policy = compilePolicy({ disable: ['email'] });
+  assert.equal(policy.redact(`bob@x.io ${gh}`), 'bob@x.io ghp_***');
+  assert.equal(await policy.isCleanAsync('bob@x.io'), true);
+  assert.equal((await policy.scanAsync(gh))[0].detector, 'github_token');
+});
+
+test('redact preserves cycles, shared references, Map, Set, and symbol metadata', () => {
+  const symbol = Symbol('meta');
+  const shared = { email: 'bob@corp.com' };
+  const input = {
+    shared,
+    again: shared,
+    map: new Map([['owner', 'alice@corp.com']]),
+    set: new Set(['carol@corp.com']),
+    [symbol]: 'dave@corp.com',
+  };
+  input.self = input;
+  const out = redact(input);
+  assert.equal(out.self, out);
+  assert.equal(out.shared, out.again);
+  assert.equal(out.shared.email, 'b***@***');
+  assert.equal(out.map.get('owner'), 'a***@***');
+  assert.deepEqual([...out.set], ['c***@***']);
+  assert.equal(out[symbol], 'd***@***');
+});
+
+test('scan terminates on circular graphs and scans Map and Set values', () => {
+  const input = { map: new Map([['email', 'alice@corp.com']]), set: new Set(['bob@corp.com']) };
+  input.self = input;
+  const findings = scan(input);
+  assert.equal(findings.filter((finding) => finding.detector === 'email').length, 2);
+});
+
+test('redact and scan handle Error and URL objects without losing their type', () => {
+  const error = new Error('request failed for alice@corp.com');
+  const url = new URL('https://example.com/callback?email=bob@corp.com');
+  const out = redact({ error, url });
+  assert.equal(out.error instanceof Error, true);
+  assert.doesNotMatch(out.error.message, /alice@corp/);
+  assert.equal(out.url instanceof URL, true);
+  assert.doesNotMatch(out.url.toString(), /bob@corp/);
+  assert.equal(scan({ error, url }, { only: ['email'] }).length, 2);
+});
+
+test('global allow and sensitive-key regexes behave consistently across values', () => {
+  const out = redact(
+    { token: 'keep', token2: 'mask-me', token3: 'keep' },
+    { redactKeys: /^token\d?$/g, allow: /^keep$/g },
+  );
+  assert.equal(out.token, 'keep');
+  assert.equal(out.token2, '***');
+  assert.equal(out.token3, 'keep');
 });
 
 test('adjacent secrets do not corrupt surrounding text', () => {

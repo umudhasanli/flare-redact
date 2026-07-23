@@ -41,6 +41,14 @@ test('streaming restore survives a placeholder split across chunks', () => {
   assert.equal(out, 'sent to alice@corp.com now');
 });
 
+test('streaming restore supports custom placeholder formats without brackets', () => {
+  const s = createSession({ placeholder: (id, index) => `<${id}:${index}>` });
+  const safe = s.redact('alice@corp.com');
+  const r = s.stream();
+  const split = safe.indexOf(':') + 1;
+  assert.equal(r.push(safe.slice(0, split)) + r.push(safe.slice(split)) + r.flush(), 'alice@corp.com');
+});
+
 test('reset starts a clean conversation', () => {
   const s = createSession();
   s.redact('alice@corp.com');

@@ -1,5 +1,44 @@
 # Changelog
 
+## 1.0.0 — 2026-07-23
+
+### Production boundaries
+
+- Sanitize credentials, path segments, query values, and fragments inside HTTP
+  URL strings; export `redactUrl()` for standalone use.
+- Redact complete OpenAI and Anthropic message structures, including tool-call
+  arguments, and restore streamed OpenAI tool arguments and Anthropic partial
+  JSON across arbitrary chunk boundaries.
+- Add `flare-redact/tool` with one-way tool/MCP helpers and a reversible,
+  conversation-scoped `createToolBoundary()` for agent loops.
+- Make stream redaction record-aware for multiline PEM private keys, fail closed
+  on unterminated keys, and bound buffered record size.
+
+### Safe and stable core
+
+- Omit raw secret values from `scan()` and `scanAsync()` findings by default.
+  Trusted diagnostics can opt in with `includeValues: true`.
+- Preserve cycles and shared references during redaction; traverse `Map`, `Set`,
+  enumerable symbols, `Error`, `URL`, and `URLSearchParams`.
+- Make global/sticky allow-list and sensitive-key regular expressions
+  deterministic across repeated values.
+- Add stable `FlareRedactError` codes; resource and stream limits use
+  `ERR_REDACTION_LIMIT`.
+- Add `compilePolicy()` and make `createRedactor()` / `definePolicy()` reuse
+  resolved detectors and matchers, including async operations.
+- Replace bracket-specific streamed vault restoration with matching based on the
+  actual placeholder set, including custom placeholder formats.
+
+### Verification
+
+- Expand the test suite from 112 to 129 production-focused tests covering HTTP
+  URL leakage, tool/MCP boundaries, streamed tool arguments, circular graphs,
+  complex built-ins, multiline keys, custom placeholders, and safe findings.
+- Add package export and tarball validation to CI.
+- Add a dedicated `0.9.x` to `1.0.0` migration guide.
+
+See [MIGRATION.md](MIGRATION.md) before upgrading.
+
 ## 0.9.0 — 2026-07-23
 
 ### Security

@@ -57,7 +57,7 @@ Nothing to configure. No list of field paths to maintain. No native build step.
 |   |   |   |
 |---|---|---|
 | 🔍 **Context-aware** — spans carry risk and confidence | 🔐 **Secure vaults** — opaque tokens, optional AES-GCM persistence | 🎭 **Useful test data** — keyed pseudonyms and typed surrogates |
-| 🤖 **LLM boundary** — strips secrets before OpenAI/Anthropic | 🌍 **24-language secret vocabulary** — plus checksum-validated IDs | 🪶 **Zero runtime dependencies** — Node, browser, and edge |
+| 🤖 **LLM + tool boundary** — protects prompts, tool calls, and MCP payloads | 🌍 **24-language secret vocabulary** — plus checksum-validated IDs | 🪶 **Zero runtime dependencies** — Node, browser, and edge |
 
 ## Contents
 
@@ -69,6 +69,7 @@ Nothing to configure. No list of field paths to maintain. No native build step.
 - [Reversible redaction](#reversible-redaction)
 - [Contextual and model-assisted PII](#contextual-and-model-assisted-pii)
 - [Build a private chat app](#build-a-private-chat-app)
+- [Protect tool calls and MCP loops](#protect-tool-calls-and-mcp-loops)
 - [Your own words](#your-own-words)
 - [See what leaks, and why](#see-what-leaks-and-why)
 - [Guard your logger in one line](#guard-your-logger-in-one-line)
@@ -92,8 +93,9 @@ npm install flare-redact
 ```
 
 Node 20+, and it runs in the browser and edge runtimes too — zero dependencies.
-Upgrading from 0.8? Read the [`0.9 migration notes`](CHANGELOG.md#090--2026-07-23)
-before changing protected transform or vault behavior.
+Upgrading from `0.9.x`? Read the [`1.0 migration guide`](MIGRATION.md). Existing
+projects are not forced across the major version; upgrade explicitly with
+`npm install flare-redact@^1.0.0`.
 
 ## Runnable examples
 
@@ -156,9 +158,10 @@ your app gets   →  Sent to alice@corp.com. Card 4242 4242 4242 4242 wasn't sto
 ```
 
 `wrapAnthropic` does the same for `messages.create`, including the system prompt.
-Both handle streaming — placeholders are restored even when one is split across
-chunks. There's a `redactPrompt(text)` too if you'd rather hold the vault
-yourself.
+Both wrappers redact complete message structures, including tool-call arguments.
+Streaming text, OpenAI tool arguments, and Anthropic partial JSON are restored
+even when a placeholder is split across chunks. There's a `redactPrompt(text)`
+too if you'd rather hold the vault yourself.
 
 ## Ways to hide a value
 
@@ -315,8 +318,31 @@ process(out.flush());
 ```
 
 `session.redactMessages([{ role, content }])` masks a whole chat array at once,
-and `session.reset()` starts a fresh conversation. Detected original values stay
-local while your app keeps a reversible reference.
+including nested tool calls, and `session.reset()` starts a fresh conversation.
+Detected original values stay local while your app keeps a reversible reference.
+
+## Protect tool calls and MCP loops
+
+An agent loop has two directions: model-produced arguments need their local
+values restored before a tool executes, while tool results need new secrets
+masked before they enter model context. One conversation-scoped boundary handles
+both without sending its vault anywhere:
+
+```js
+import { createToolBoundary } from 'flare-redact/tool';
+
+const boundary = createToolBoundary();
+
+const safePrompt = boundary.redactForModel(userMessage);
+const modelCall = await model.generateToolCall(safePrompt);
+const localCall = boundary.restoreForTool(modelCall);
+
+const result = await executeTool(localCall);
+const safeResult = boundary.redactForModel(result);
+```
+
+For safe logging without reversibility, use `redactToolCall()`,
+`redactToolResult()`, or `redactMcpMessage()` from the same entry point.
 
 ## Your own words
 
@@ -352,8 +378,8 @@ flare-redact --restore map.json < safe > original
 ## See what leaks, and why
 
 `scan()` finds secrets without changing the input, explains every hit in plain
-English, and reports one-based line/column locations — handy for alerts,
-dashboards, and understanding *why* something matched.
+English, and reports one-based line/column locations — without returning the raw
+secret by default.
 
 ```js
 import { scan } from 'flare-redact';
@@ -367,6 +393,10 @@ scan('deploy with password=hunter2 and AKIAIOSFODNN7EXAMPLE');
 //     why: 'Pairs with a secret key to control cloud resources and billing.', start: 33, … },
 // ]
 ```
+
+Trusted diagnostics can request the original span with
+`scan(input, { includeValues: true })`. Never enable that option for logs, CI
+reports, analytics, or error tracking.
 
 Need just the shape of it?
 
@@ -430,7 +460,8 @@ import { winstonRedact } from 'flare-redact/winston';
 winston.format.combine(winston.format(winstonRedact(policy))(), winston.format.json());
 ```
 
-**HTTP** — a safe-to-log snapshot of a request; the live request is untouched:
+**HTTP** — a safe-to-log snapshot of a request; the live request is untouched.
+The URL string, query object, params, headers, and body are all sanitized:
 
 ```js
 import { httpRedactor } from 'flare-redact/http';
@@ -445,8 +476,9 @@ and `redactStream` too.
 
 ## Streams
 
-Pipe any log stream through it — secrets are masked line by line, even when one
-is split across chunks.
+Pipe any log stream through it. Secrets may be split across chunks, and bounded
+multiline PEM private keys are masked as one record. Unterminated private keys
+fail closed instead of leaking their remaining bytes.
 
 ```js
 import { redactStream } from 'flare-redact/stream';
@@ -507,7 +539,7 @@ machine-readable JSON and SARIF reports never echo the matched secret value:
       '*.ts' '*.tsx' '*.jsx' \
       ':(exclude)**/package-lock.json' \
       | while IFS= read -r -d '' file; do printf './%s\0' "$file"; done \
-      | xargs -0 -r npx --yes --package flare-redact@0.9.0 flare-redact --scan
+      | xargs -0 -r npx --yes --package flare-redact@1.0.0 flare-redact --scan
 ```
 
 The scan runs on the GitHub runner, reports safe file and source locations, and
@@ -654,7 +686,8 @@ scanAsync(input, opts?): Promise<Finding[]>   // supports async local NER provid
 isClean(input, opts?): boolean                // any secrets at all?
 isCleanAsync(input, opts?): Promise<boolean>
 summary(input, opts?): { total, byDetector, byRisk }
-createRedactor(opts) / definePolicy(opts)      // one policy: redact, scan, vault(), wrapConsole, options
+compilePolicy(opts)                            // pre-resolved reusable sync + async policy
+createRedactor(opts) / definePolicy(opts)      // compatibility names for compilePolicy
 wrapConsole(opts?, console?): () => void      // patch console.*, returns restore
 
 createVault(opts?): Vault                      // reversible: redact / restore / entries
@@ -666,6 +699,7 @@ openVault(envelope, password): Promise<Array<[placeholder, original]>>
 pinoRedact(opts?)        // 'flare-redact/pino'    → { formatters: { log } }
 winstonRedact(opts?)     // 'flare-redact/winston' → a format transform
 redactHttp(req, opts?)   // 'flare-redact/http'    → safe-to-log request snapshot
+redactUrl(url, opts?)    // 'flare-redact/http'    → sanitized absolute/relative URL
 httpRedactor(opts?)      // 'flare-redact/http'    → Express/Connect middleware
 redactCsv(text, opts?)   // 'flare-redact/csv'     → anonymize a CSV dataset
 wrapFetch(fetch, opts?)  // 'flare-redact/fetch'   → redact egress to named hosts
@@ -675,14 +709,19 @@ wrapOpenAI(client, opts?)                       // scrub prompts, restore replie
 wrapAnthropic(client, opts?)                    // same for messages.create + system
 redactPrompt(text, opts?): { text, vault }
 
+// from 'flare-redact/tool'
+createToolBoundary(opts?)                      // reversible model ↔ tool/MCP boundary
+redactToolCall / redactToolResult / redactMcpMessage
+
 // from 'flare-redact/stream'
-redactStream(opts?): Transform                  // line-wise stream redaction
+redactStream(opts?): Transform                  // chunk-safe + bounded multiline PEM redaction
 
 // opts
 // {
 //   only?, enable?, disable?, custom?,   // which detectors run
 //   mode?: 'mask' | 'label' | 'hash' | 'pseudonym' | 'surrogate',
 //   transformSecret?, mask?, minConfidence?, semanticProvider?, limits?,
+//   includeValues?: boolean,                // scan only; unsafe raw values
 //   redactKeys?: boolean | RegExp | string[],
 //   allow?: RegExp | string[],
 //   terms?: string[] | { term: replacement }, termsCaseSensitive?,
@@ -712,6 +751,8 @@ npm run benchmark:adversarial
 ## Security boundaries
 
 - Detection is best-effort; a clean scan is not proof that data contains no PII.
+- `scan()` omits raw values by default. `includeValues` intentionally puts those
+  secrets back into process memory and must stay out of external reports.
 - `pseudonym` is keyed, deterministic pseudonymization — not NIST FF1 encryption.
 - A vault map is sensitive; persist only the authenticated encrypted envelope.
 - Restoring a placeholder intentionally reveals its original locally. Do not

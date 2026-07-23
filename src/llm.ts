@@ -1,41 +1,12 @@
-import { createVault, buildRestore, type Vault, type VaultOptions } from './vault.js';
+import { createVault, buildStreamRestore, type Vault, type VaultOptions } from './vault.js';
 
 export type { Vault, VaultOptions } from './vault.js';
 export { createVault } from './vault.js';
 
 const WRAPPED = Symbol.for('flare-redact.wrapped');
 
-function redactContent(content: unknown, vault: Vault): unknown {
-  if (typeof content === 'string') return vault.redact(content);
-  if (Array.isArray(content)) {
-    return content.map((part) =>
-      part && typeof part === 'object' && typeof (part as { text?: unknown }).text === 'string'
-        ? { ...part, text: vault.redact((part as { text: string }).text) }
-        : part,
-    );
-  }
-  return content;
-}
-
 function makeStreamRestorer(vault: Vault) {
-  const restore = buildRestore(vault.entries());
-  let buf = '';
-  return {
-    push(chunk: string): string {
-      buf += chunk;
-      // Hold back a trailing "[…" that could still be an unfinished placeholder.
-      const open = buf.lastIndexOf('[');
-      const emitEnd = open !== -1 && buf.indexOf(']', open) === -1 ? open : buf.length;
-      const emit = buf.slice(0, emitEnd);
-      buf = buf.slice(emitEnd);
-      return restore(emit);
-    },
-    flush(): string {
-      const out = restore(buf);
-      buf = '';
-      return out;
-    },
-  };
+  return buildStreamRestore(vault.entries());
 }
 
 /** Redact a prompt and hand back the vault so you can restore the reply yourself. */
@@ -62,9 +33,7 @@ export function wrapOpenAI<T extends OpenAILike>(client: T, opts: VaultOptions =
 
   completions.create = (params: OpenAIParams, ...rest: unknown[]) => {
     const vault = createVault(opts);
-    const messages = Array.isArray(params?.messages)
-      ? params.messages.map((m) => ({ ...m, content: redactContent(m.content, vault) }))
-      : params?.messages;
+    const messages = Array.isArray(params?.messages) ? vault.redact(params.messages) : params?.messages;
     const result = original({ ...params, messages }, ...rest);
     if (params?.stream) return wrapOpenAIStream(result, vault);
     return Promise.resolve(result).then((res) => vault.restore(res));
@@ -75,25 +44,63 @@ export function wrapOpenAI<T extends OpenAILike>(client: T, opts: VaultOptions =
 
 async function* wrapOpenAIStream(result: unknown, vault: Vault): AsyncGenerator<unknown> {
   const stream = (await result) as AsyncIterable<OpenAIChunk>;
-  const r = makeStreamRestorer(vault);
+  const restorers = new Map<string, ReturnType<typeof makeStreamRestorer>>();
+  const getRestorer = (key: string) => {
+    let restorer = restorers.get(key);
+    if (!restorer) {
+      restorer = makeStreamRestorer(vault);
+      restorers.set(key, restorer);
+    }
+    return restorer;
+  };
   let last: OpenAIChunk | undefined;
   for await (const chunk of stream) {
     last = chunk;
-    const content = chunk?.choices?.[0]?.delta?.content;
-    if (typeof content === 'string') {
-      const out = r.push(content);
-      yield {
-        ...chunk,
-        choices: chunk.choices.map((c, i) => (i === 0 ? { ...c, delta: { ...c.delta, content: out } } : c)),
-      };
-    } else {
-      yield chunk;
-    }
+    yield {
+      ...chunk,
+      choices: chunk.choices.map((choice, choicePosition) => {
+        const choiceIndex = choice.index ?? choicePosition;
+        const delta = choice.delta;
+        if (!delta) return choice;
+        let nextDelta = delta;
+        if (typeof delta.content === 'string') {
+          nextDelta = {
+            ...nextDelta,
+            content: getRestorer(`choice:${choiceIndex}:content`).push(delta.content),
+          };
+        }
+        if (Array.isArray(delta.tool_calls)) {
+          nextDelta = {
+            ...nextDelta,
+            tool_calls: delta.tool_calls.map((call, callPosition) => {
+              const args = call.function?.arguments;
+              if (typeof args !== 'string') return call;
+              const callIndex = call.index ?? callPosition;
+              return {
+                ...call,
+                function: {
+                  ...call.function,
+                  arguments: getRestorer(`choice:${choiceIndex}:tool:${callIndex}`).push(args),
+                },
+              };
+            }),
+          };
+        }
+        return { ...choice, delta: nextDelta };
+      }),
+    };
   }
-  const tail = r.flush();
-  if (tail) {
+  for (const [key, restorer] of restorers) {
+    const tail = restorer.flush();
+    if (!tail) continue;
     const base = last ? { id: last.id, object: last.object, model: last.model } : {};
-    yield { ...base, choices: [{ index: 0, delta: { content: tail }, finish_reason: null }] };
+    const tool = /^choice:(\d+):tool:(\d+)$/.exec(key);
+    const content = /^choice:(\d+):content$/.exec(key);
+    const choiceIndex = Number(tool?.[1] ?? content?.[1] ?? 0);
+    const delta = tool
+      ? { tool_calls: [{ index: Number(tool[2]), function: { arguments: tail } }] }
+      : { content: tail };
+    yield { ...base, choices: [{ index: choiceIndex, delta, finish_reason: null }] };
   }
 }
 
@@ -117,10 +124,10 @@ export function wrapAnthropic<T extends AnthropicLike>(client: T, opts: VaultOpt
     const redacted: AnthropicParams = {
       ...params,
       messages: Array.isArray(params?.messages)
-        ? params.messages.map((m) => ({ ...m, content: redactContent(m.content, vault) }))
+        ? vault.redact(params.messages)
         : params?.messages,
     };
-    if (params?.system !== undefined) redacted.system = redactContent(params.system, vault);
+    if (params?.system !== undefined) redacted.system = vault.redact(params.system);
     const result = original(redacted, ...rest);
     if (params?.stream) return wrapAnthropicStream(result, vault);
     return Promise.resolve(result).then((res) => vault.restore(res));
@@ -131,17 +138,43 @@ export function wrapAnthropic<T extends AnthropicLike>(client: T, opts: VaultOpt
 
 async function* wrapAnthropicStream(result: unknown, vault: Vault): AsyncGenerator<unknown> {
   const stream = (await result) as AsyncIterable<AnthropicEvent>;
-  const r = makeStreamRestorer(vault);
+  const restorers = new Map<string, ReturnType<typeof makeStreamRestorer>>();
+  const getRestorer = (key: string) => {
+    let restorer = restorers.get(key);
+    if (!restorer) {
+      restorer = makeStreamRestorer(vault);
+      restorers.set(key, restorer);
+    }
+    return restorer;
+  };
   for await (const event of stream) {
     const text = event?.delta?.text;
+    const partialJson = event?.delta?.partial_json;
+    const index = event.index ?? 0;
     if (event?.type === 'content_block_delta' && typeof text === 'string') {
-      yield { ...event, delta: { ...event.delta, text: r.push(text) } };
+      yield { ...event, delta: { ...event.delta, text: getRestorer(`text:${index}`).push(text) } };
+    } else if (event?.type === 'content_block_delta' && typeof partialJson === 'string') {
+      yield {
+        ...event,
+        delta: {
+          ...event.delta,
+          partial_json: getRestorer(`json:${index}`).push(partialJson),
+        },
+      };
     } else {
       yield event;
     }
   }
-  const tail = r.flush();
-  if (tail) yield { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: tail } };
+  for (const [key, restorer] of restorers) {
+    const tail = restorer.flush();
+    if (!tail) continue;
+    const [kind, rawIndex] = key.split(':');
+    const index = Number(rawIndex);
+    const delta = kind === 'json'
+      ? { type: 'input_json_delta', partial_json: tail }
+      : { type: 'text_delta', text: tail };
+    yield { type: 'content_block_delta', index, delta };
+  }
 }
 
 type Marked = { [WRAPPED]?: boolean };
@@ -155,7 +188,19 @@ interface OpenAIChunk {
   id?: unknown;
   object?: unknown;
   model?: unknown;
-  choices: Array<{ delta?: { content?: unknown; [k: string]: unknown }; [k: string]: unknown }>;
+  choices: Array<{
+    index?: number;
+    delta?: {
+      content?: unknown;
+      tool_calls?: Array<{
+        index?: number;
+        function?: { arguments?: unknown; [k: string]: unknown };
+        [k: string]: unknown;
+      }>;
+      [k: string]: unknown;
+    };
+    [k: string]: unknown;
+  }>;
   [k: string]: unknown;
 }
 interface OpenAICompletions {
@@ -173,7 +218,8 @@ interface AnthropicParams {
 }
 interface AnthropicEvent {
   type?: string;
-  delta?: { text?: unknown; [k: string]: unknown };
+  index?: number;
+  delta?: { text?: unknown; partial_json?: unknown; [k: string]: unknown };
   [k: string]: unknown;
 }
 interface AnthropicMessages {

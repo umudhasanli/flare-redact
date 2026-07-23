@@ -1,6 +1,6 @@
 {
   "name": "flare-redact",
-  "version": "0.9.0",
+  "version": "1.0.0",
   "description": "Local, zero-dependency secret and PII redaction with contextual findings, secure reversible vaults, and LLM adapters.",
   "type": "module",
   "sideEffects": false,
@@ -18,6 +18,10 @@
     "./llm": {
       "types": "./dist/llm.d.ts",
       "default": "./dist/llm.js"
+    },
+    "./tool": {
+      "types": "./dist/tool.d.ts",
+      "default": "./dist/tool.js"
     },
     "./session": {
       "types": "./dist/session.d.ts",
@@ -54,6 +58,7 @@
     "bench/adversarial-runtime.mjs",
     "README.md",
     "CHANGELOG.md",
+    "MIGRATION.md",
     "SECURITY.md",
     "LICENSE"
   ],

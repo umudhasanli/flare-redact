@@ -23,6 +23,8 @@ jobs:
       - run: npm ci
       - run: npm test
       - if: matrix.node == 24
+        run: npm pack --dry-run
+      - if: matrix.node == 24
         run: npm run benchmark:adversarial
       - if: matrix.node == 24
         run: npm --prefix examples/openai-privacy install

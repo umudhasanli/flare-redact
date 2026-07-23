@@ -11,7 +11,11 @@ export interface Finding {
   detector: string;
   label: string;
   why: string;
-  value: string;
+  /**
+   * The matched secret. Omitted by default because findings are commonly
+   * logged or exported. Set `includeValues: true` only for trusted diagnostics.
+   */
+  value?: string;
   start?: number;
   end?: number;
   /** One-based line within the scanned string. */
@@ -58,6 +62,8 @@ export interface RedactOptions {
   semanticProvider?: SemanticProvider;
   /** Drop findings below this confidence (default: 0). */
   minConfidence?: number;
+  /** Include raw matched values in scan results. Unsafe for logs and reports. */
+  includeValues?: boolean;
   limits?: {
     /** Maximum UTF-16 input length per scanned string (default: 16 MiB). */
     maxInputLength?: number;
@@ -67,12 +73,23 @@ export interface RedactOptions {
 }
 
 export interface Hit extends Finding {
+  value: string;
   det: Detector;
 }
 
-export class RedactionLimitError extends Error {
-  constructor(message: string) {
+export class FlareRedactError extends Error {
+  readonly code: string;
+
+  constructor(code: string, message: string) {
     super(message);
+    this.name = 'FlareRedactError';
+    this.code = code;
+  }
+}
+
+export class RedactionLimitError extends FlareRedactError {
+  constructor(message: string) {
+    super('ERR_REDACTION_LIMIT', message);
     this.name = 'RedactionLimitError';
   }
 }
@@ -103,7 +120,10 @@ export function resolveDetectors(opts: RedactOptions): Detector[] {
 export function keyMatcher(opts: RedactOptions): (key: string) => boolean {
   const rk = opts.redactKeys;
   if (rk === false) return () => false;
-  if (rk instanceof RegExp) return (k) => rk.test(k);
+  if (rk instanceof RegExp) return (k) => {
+    rk.lastIndex = 0;
+    return rk.test(k);
+  };
   if (Array.isArray(rk)) {
     const set = new Set(rk.map((s) => s.toLowerCase()));
     return (k) => set.has(k.toLowerCase());
@@ -114,7 +134,10 @@ export function keyMatcher(opts: RedactOptions): (key: string) => boolean {
 export function allowMatcher(opts: RedactOptions): (value: string) => boolean {
   const a = opts.allow;
   if (!a) return () => false;
-  if (a instanceof RegExp) return (v) => a.test(v);
+  if (a instanceof RegExp) return (v) => {
+    a.lastIndex = 0;
+    return a.test(v);
+  };
   const set = new Set(a);
   return (v) => set.has(v);
 }

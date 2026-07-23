@@ -15,7 +15,7 @@ import {
 } from './index.js';
 import { redactCsv } from './csv.js';
 
-const VERSION = '0.9.0';
+const VERSION = '1.0.0';
 type ScanFormat = 'pretty' | 'json' | 'sarif';
 
 const HELP = `flare-redact — hide secrets & PII before they hit a log

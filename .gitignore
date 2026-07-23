@@ -10,3 +10,5 @@ npm-debug.log*
 research/
 bench/adapters/
 bench/evaluate.mjs
+output/pdf/
+tmp/pdfs/

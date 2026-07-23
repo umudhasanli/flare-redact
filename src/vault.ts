@@ -5,6 +5,7 @@ import {
   scanString,
   type RedactOptions,
 } from './engine.js';
+import { mapGraph } from './graph.js';
 
 export interface Vault {
   redact<T>(input: T): T;
@@ -42,15 +43,70 @@ export function buildRestore(entries: Array<[string, string]>): (text: string) =
   return (text) => text.replace(re, (m) => lookup.get(m) ?? m);
 }
 
+export interface IncrementalRestorer {
+  push(chunk: string): string;
+  flush(): string;
+}
+
+/**
+ * Restore placeholders across arbitrary stream chunk boundaries. This uses the
+ * actual placeholder strings, so custom formats do not need square brackets.
+ */
+export function buildStreamRestore(entries: Array<[string, string]>): IncrementalRestorer {
+  const restoreText = buildRestore(entries);
+  const placeholders = entries.map(([placeholder]) => placeholder);
+  let buffer = '';
+
+  const pendingPrefixLength = (): number => {
+    let keep = 0;
+    for (const placeholder of placeholders) {
+      const limit = Math.min(buffer.length, placeholder.length - 1);
+      for (let length = limit; length > keep; length--) {
+        if (buffer.endsWith(placeholder.slice(0, length))) {
+          keep = length;
+          break;
+        }
+      }
+    }
+    return keep;
+  };
+
+  return {
+    push(chunk: string): string {
+      buffer += chunk;
+      const keep = pendingPrefixLength();
+      const emitEnd = buffer.length - keep;
+      const emit = buffer.slice(0, emitEnd);
+      buffer = buffer.slice(emitEnd);
+      return restoreText(emit);
+    },
+    flush(): string {
+      const out = restoreText(buffer);
+      buffer = '';
+      return out;
+    },
+  };
+}
+
 function walkStrings(value: unknown, fn: (s: string) => string): unknown {
-  if (typeof value === 'string') return fn(value);
-  if (Array.isArray(value)) return value.map((v) => walkStrings(v, fn));
-  if (value && typeof value === 'object') {
-    const out: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(value)) out[k] = walkStrings(v, fn);
-    return out;
-  }
-  return value;
+  return mapGraph(value, fn);
+}
+
+function redactGraph(
+  value: unknown,
+  redactString: (text: string) => string,
+  matchKey: (key: string) => boolean,
+  allow: (value: string) => boolean,
+  mint: (value: string, detectorId: string) => string,
+): unknown {
+  return mapGraph(
+    value,
+    redactString,
+    (key, raw) => {
+      if (matchKey(key) && !allow(raw)) return mint(raw, 'sensitive_key');
+      return redactString(raw);
+    },
+  );
 }
 
 /**
@@ -99,22 +155,8 @@ export function createVault(opts: VaultOptions = {}): Vault {
     return out + text.slice(cursor);
   };
 
-  const redactWalk = (value: unknown): unknown => {
-    if (typeof value === 'string') return redactStr(value);
-    if (Array.isArray(value)) return value.map(redactWalk);
-    if (value && typeof value === 'object') {
-      const out: Record<string, unknown> = {};
-      for (const [k, v] of Object.entries(value)) {
-        if (typeof v === 'string' && matchKey(k) && !allow(v)) out[k] = mint(v, 'sensitive_key');
-        else out[k] = redactWalk(v);
-      }
-      return out;
-    }
-    return value;
-  };
-
   return {
-    redact: <T>(input: T) => redactWalk(input) as T,
+    redact: <T>(input: T) => redactGraph(input, redactStr, matchKey, allow, mint) as T,
     restore: <T>(input: T) => walkStrings(input, buildRestore([...phToOrig])) as T,
     entries: () => [...phToOrig],
     get size() {
