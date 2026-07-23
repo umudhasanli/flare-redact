@@ -1,5 +1,30 @@
 # Changelog
 
+## Unreleased
+
+### Detection
+
+- Add a learned **secret-confidence classifier** to cut false positives from
+  generic detectors. When `refineConfidence` is enabled, a small logistic-
+  regression model scores each match from a detector marked `refine` (currently
+  `high_entropy`) as a real secret versus a benign look-alike (UUID, git SHA,
+  digest, object id, slug, dictionary word) and nudges its confidence. Pair with
+  `minConfidence` to drop the noise. Checksum-validated detectors are never
+  touched.
+- The model is character-level logistic regression trained offline by
+  `scripts/train-confidence-model.mjs` and shipped as fixed weights in
+  `src/confidence-model.ts`, so the runtime stays zero-dependency, synchronous,
+  and deterministic — no model download or native add-on, safe on edge and in
+  the browser.
+- Export `secretProbability`, `extractFeatures`, `shannonEntropy`, and the model
+  from the package root and from the new `flare-redact/ml` subpath, so callers
+  can build their own confidence filters.
+
+### CLI
+
+- Add `--refine-confidence` to enable the classifier from the command line;
+  pairs with `--min-confidence`.
+
 ## 1.1.0 — 2026-07-23
 
 ### Detection

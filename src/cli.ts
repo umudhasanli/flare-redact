@@ -44,6 +44,10 @@ OPTIONS
   --hash-salt <s>   deprecated; prefer --secret-env
   --min-confidence <n>
                     drop findings below this confidence (0-1)
+  --refine-confidence
+                    use the learned classifier to refine confidence for
+                    generic detectors (fewer false positives on UUIDs,
+                    hashes, and slugs); pairs with --min-confidence
   --include-values  include raw matched values in --scan output
                     (unsafe for logs and reports)
   --only <ids>      use only these detectors (comma-separated)
@@ -70,6 +74,7 @@ EXAMPLES
   flare-redact --sarif .env > flare-redact.sarif
   flare-redact --json --mode hash < event.json
   flare-redact --enable high_entropy,ipv4 < app.log
+  flare-redact --scan --enable high_entropy --refine-confidence --min-confidence 0.5 app.log
 `;
 
 interface ParsedArgs {
@@ -132,6 +137,7 @@ function parseArgs(argv: string[]): ParsedArgs {
       case '--mode': opts.mode = parseMode(argv[++i]); break;
       case '--hash-salt': opts.hashSalt = argv[++i]; break;
       case '--min-confidence': opts.minConfidence = parseConfidence(argv[++i]); break;
+      case '--refine-confidence': opts.refineConfidence = true; break;
       case '--include-values': opts.includeValues = true; break;
       case '--secret-env': secretEnv = envName(argv[++i], '--secret-env'); break;
       case '--term': { const w = argv[++i]; if (w) terms.push(w); break; }

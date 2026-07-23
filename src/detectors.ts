@@ -28,6 +28,13 @@ export interface Detector {
     negative?: RegExp;
     window?: number;
   };
+  /**
+   * Let the learned confidence model refine this detector's score when
+   * `refineConfidence` is enabled. Use it on generic, format-only matchers that
+   * over-fire on benign high-entropy text; leave it off for checksum-validated
+   * detectors, which are already certain.
+   */
+  refine?: boolean;
   /** Cheap literal gate evaluated before the regular expression. */
   prefilter?: string[];
 }
@@ -321,6 +328,7 @@ export const DETECTORS: Detector[] = [
     mask: keepPrefix(4),
     default: false,
     tags: ['secret'],
+    refine: true,
   },
   {
     id: 'person_name',

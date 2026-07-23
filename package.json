@@ -19,6 +19,10 @@
       "types": "./dist/llm.d.ts",
       "default": "./dist/llm.js"
     },
+    "./ml": {
+      "types": "./dist/ml.d.ts",
+      "default": "./dist/ml.js"
+    },
     "./tool": {
       "types": "./dist/tool.d.ts",
       "default": "./dist/tool.js"
