@@ -20,6 +20,26 @@
   from the package root and from the new `flare-redact/ml` subpath, so callers
   can build their own confidence filters.
 
+### Detection (continued)
+
+- Teach the opt-in `phone` detector formatted national numbers, not just bare
+  E.164: `+90 532 123 45 67`, `(555) 123-4567`, and trunk-0 forms like
+  `0532 123 45 67`. Candidates are digit-count validated (8–15) and dotted
+  dates such as `07.24.2026` are rejected, so bare digit runs still never
+  match.
+- Add `gcp_service_account` (service-account JSON `private_key_id`) and
+  `gcp_refresh_token` (`1//…` OAuth refresh tokens), both on by default.
+
+### Runtimes
+
+- Officially smoke-test the dependency-free core on **Bun and Deno** in CI on
+  every push; publishing now requires those runtimes to pass. A new
+  `scripts/runtime-smoke.mjs` exercises redaction, vault sealing via Web
+  Crypto, and the ml classifier on any ESM runtime.
+- Document React/browser usage: the core is plain ESM, tree-shakeable, and
+  Web Crypto based — no Node built-ins outside the CLI and stream/logger
+  adapters.
+
 ### CLI
 
 - Add `--refine-confidence` to enable the classifier from the command line;

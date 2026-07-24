@@ -98,6 +98,27 @@ Upgrading from `0.9.x`? Read the [`1.0 migration guide`](MIGRATION.md). Existing
 projects are not forced across the major version; upgrade explicitly with
 `npm install flare-redact@^1.0.0`.
 
+### React and the browser
+
+The core is plain ESM with no Node built-ins, is tree-shakeable
+(`sideEffects: false`), and uses the standard Web Crypto API — so `redact`,
+`scan`, vaults, and the LLM helpers work unchanged in React, Vue, and edge
+functions. CI smoke-tests the core on Bun and Deno on every push.
+
+```jsx
+import { redact } from 'flare-redact';
+
+function SupportTicket({ text }) {
+  // Mask pasted keys and card numbers before the ticket is rendered or sent on.
+  return <pre>{redact(text)}</pre>;
+}
+```
+
+Only the Node-specific entry points (`flare-redact` CLI, `/stream`, `/pino`,
+`/winston`) need Node. One honest caveat: client-side redaction protects what
+you *forward* (analytics, logs, LLM calls) — it is not a substitute for
+server-side redaction, since the original value already reached the browser.
+
 ## Runnable examples
 
 Clone the repository and run these small applications locally:
@@ -652,7 +673,7 @@ Opt in with `enable`:
 | `finance` | SWIFT/BIC, US ABA routing numbers |
 | `vehicle` | VINs (checksum-validated) |
 | `network` | IPs, MAC addresses, coordinates, internal URLs |
-| `phone` | E.164 phone numbers |
+| `phone` | E.164 and formatted national numbers (`+90 532 123 45 67`, `(555) 123-4567`, `0532 123 45 67`) — digit-count validated, date-safe |
 
 Plus object values whose **key name** is sensitive (`password`, `token`,
 `authorization`, `cookie`, `cvv`, …) are masked regardless of content.
