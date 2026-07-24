@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.2.0 — 2026-07-24
 
 ### Detection
 
@@ -24,6 +24,17 @@
 
 - Add `--refine-confidence` to enable the classifier from the command line;
   pairs with `--min-confidence`.
+
+### Verification
+
+- Add `npm run benchmark:graph`, covering the paths adapter users actually hit:
+  `redact()` on flat strings and deep object graphs, and reversible vault
+  mint + restore round trips. Previously only `scan()` throughput was measured.
+- Add direct unit tests for the shape-preserving transforms (keyed
+  pseudonymization, Luhn-valid card surrogates, email and person stand-ins)
+  and for object-graph traversal: `URL` / `URLSearchParams` rewriting, `Error`
+  prototypes with custom properties, shared references, sparse arrays, symbol
+  keys, and `Map`/`Set` entries. The suite grows from 162 to 170 tests.
 
 ## 1.1.0 — 2026-07-23
 
