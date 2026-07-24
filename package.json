@@ -73,7 +73,8 @@
     "benchmark": "npm run build && node bench/performance.mjs",
     "benchmark:adversarial": "npm run build && node bench/adversarial-runtime.mjs",
     "prepublishOnly": "npm run build",
-    "benchmark:graph": "npm run build && node bench/graph-vault.mjs"
+    "benchmark:graph": "npm run build && node bench/graph-vault.mjs",
+    "build:playground": "npm run build && npx --yes esbuild dist/index.js --bundle --format=esm --minify --outfile=docs/playground/flare-redact.min.js"
   },
   "keywords": [
     "redact",
