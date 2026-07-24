@@ -133,9 +133,9 @@
             <option value="mask">mask</option>
             <option value="label">label</option>
             <option value="hash">hash</option>
-            <option value="fpe">fpe (format-preserving)</option>
+            <option value="pseudonym">pseudonym (shape-preserving)</option>
           </select>
-          <label><input type="checkbox" id="pii" checked> national IDs / crypto (opt-in)</label>
+          <label><input type="checkbox" id="pii" checked> opt-in detectors (national IDs, crypto, phone, network)</label>
           <span id="status" style="margin-left:auto;color:var(--faint)"></span>
         </div>
         <div class="grid">
@@ -174,8 +174,9 @@
   <script type="module">
     const SAMPLE = `User alice@corp.com paid with 4242 4242 4242 4242
 Authorization: Bearer ghp_R2v8KxNq7t3Zp1QwErTyUiOpAsDfGhJkLzXc
+anthropic key sk-ant-api03-w9K2mQ7vR4jX8nP1bT6cY3hF5dL0sA9gZe2uI7oM4qW6rV8tB1nC5xD3fH7jK9lZ
 db=postgres://admin:s3cr3tPass@10.2.0.4/prod
-密码: hunter2   iban=GB82WEST12345698765432
+密码: hunter2   iban=GB82WEST12345698765432   tel +90 532 123 45 67
 wallet 0x742d35Cc6634C0532925a3b844Bc454e4438f44e`;
 
     const $ = (id) => document.getElementById(id);
@@ -185,12 +186,13 @@ wallet 0x742d35Cc6634C0532925a3b844Bc454e4438f44e`;
 
     let redact, scan;
     try {
-      const mod = await import('https://esm.sh/flare-redact@0.7.0');
+      // Bundled from the same release that ships to npm — nothing leaves this page.
+      const mod = await import('./playground/flare-redact.min.js');
       redact = mod.redact; scan = mod.scan;
-      status.textContent = 'ready';
+      status.textContent = 'v1.2.0 · runs entirely in your browser';
     } catch (e) {
       status.textContent = 'failed to load library';
-      $('out').textContent = 'Could not load flare-redact from the CDN.';
+      $('out').textContent = 'Could not load the playground bundle.';
     }
 
     const esc = (s) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
@@ -198,8 +200,8 @@ wallet 0x742d35Cc6634C0532925a3b844Bc454e4438f44e`;
     function run() {
       if (!redact) return;
       const text = $('in').value;
-      const opts = { mode: $('mode').value };
-      if ($('pii').checked) opts.enable = ['pii', 'crypto', 'network'];
+      const opts = { mode: $('mode').value, transformSecret: 'playground-demo-secret' };
+      if ($('pii').checked) opts.enable = ['pii', 'crypto', 'network', 'phone'];
       let out = '';
       try { out = redact(text, opts); } catch (e) { out = String(e); }
       // highlight the masks (***, [REDACTED...], placeholders)
