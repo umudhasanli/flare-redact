@@ -35,10 +35,27 @@ jobs:
       - if: matrix.node == 24
         run: npm --prefix examples/express-pino run smoke
 
+  runtimes:
+    name: Bun & Deno smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - run: npm ci
+      - run: npm run build
+      - uses: oven-sh/setup-bun@v2
+      - run: bun scripts/runtime-smoke.mjs
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - run: deno run --allow-read scripts/runtime-smoke.mjs
+
   publish:
     name: Publish npm
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: test
+    needs: [test, runtimes]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5

@@ -60,6 +60,17 @@ test('every new service token is detected under its own id and masked', () => {
   }
 });
 
+test('GCP service-account key ids and refresh tokens are caught by default', () => {
+  const blob = `{"type": "service_account", "private_key_id": "${'ab12cd34'.repeat(5)}"}`;
+  const [finding] = scan(blob);
+  assert.equal(finding.detector, 'gcp_service_account');
+  assert.equal(redact(blob).includes('ab12cd34'), false);
+
+  const refresh = '1//' + 'Ab12Cd34_-'.repeat(4);
+  assert.equal(scan(`token ${refresh}`)[0].detector, 'gcp_refresh_token');
+  assert.equal(redact(`token ${refresh}`).includes(refresh), false);
+});
+
 test('OpenRouter and Anthropic keys never fall through to openai_key', () => {
   const openrouter = 'sk-or-v1-' + 'ab12'.repeat(16);
   const anthropic = 'sk-ant-api03-' + 'a1B2'.repeat(23) + 'A';

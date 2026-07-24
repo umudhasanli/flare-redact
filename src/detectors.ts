@@ -87,6 +87,21 @@ export function fnv1a(s: string): string {
   return (h >>> 0).toString(16).padStart(8, '0');
 }
 
+/**
+ * Phone candidates must carry 8–15 digits (E.164 bounds) and, for national
+ * formats, must not end in a 19xx/20xx year — that rejects dotted dates like
+ * `07.24.2026` while keeping real numbers.
+ */
+export function phoneValid(value: string): boolean {
+  const digits = value.replace(/\D/g, '');
+  if (digits.length < 8 || digits.length > 15) return false;
+  if (!value.startsWith('+')) {
+    if (digits.length < 9) return false;
+    if (/(?:19|20)\d{2}$/.test(digits) && /[.\s-](?:19|20)\d{2}$/.test(value)) return false;
+  }
+  return true;
+}
+
 export const SENSITIVE_KEY_RE =
   /^(?:pass(?:word|wd)?|secret|token|api[_-]?key|access[_-]?key|client[_-]?secret|private[_-]?key|auth(?:orization)?|cookie|session[_-]?id|refresh[_-]?token|credit[_-]?card|card[_-]?number|cvv|ssn)$/i;
 
@@ -286,11 +301,22 @@ export const DETECTORS: Detector[] = [
   {
     id: 'phone',
     label: 'Phone number',
-    why: 'An E.164 phone number is personal data.',
-    pattern: /\+[1-9]\d{7,14}\b/g,
-    mask: (m) => m.slice(0, 3) + '***',
+    why: 'A phone number is personal data.',
+    // Three shapes: E.164 with optional formatting (+90 532 123 45 67),
+    // a parenthesized area code ((555) 123-4567), or a trunk-0 national number
+    // with separator groups (0532 123 45 67). Bare digit runs never match —
+    // they need a +, parens, or a leading trunk 0 plus separators.
+    pattern:
+      /(?:\+[1-9]\d{0,2}[\s.-]?(?:\(\d{1,4}\)[\s.-]?)?\d{1,4}(?:[\s.-]?\d{2,4}){1,4}|\(\d{2,4}\)[\s.-]?\d{2,4}(?:[\s.-]\d{2,4}){1,3}|\b0\d{1,4}(?:[\s.-]\d{2,4}){2,4})(?!\d)/g,
+    validate: phoneValid,
+    mask: (m) => (m.startsWith('+') ? m.slice(0, 3) : m.slice(0, 2)) + '***',
     default: false,
     tags: ['pii'],
+    confidence: 0.8,
+    context: {
+      positive: /\b(?:phone|tel|mobile|cell|call|fax|whatsapp|viber|telefon|номер|téléphone|handy)\b/i,
+      negative: /\b(?:date|version|invoice|order|ref)\b/i,
+    },
   },
   {
     id: 'ipv4',
