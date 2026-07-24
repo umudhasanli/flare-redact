@@ -1,0 +1,26 @@
+# flare-redact
+
+> Zero-dependency JavaScript/TypeScript library that redacts secrets and PII — API keys, tokens, JWTs, credit cards, emails, IBANs, national IDs — from strings, objects, logs, LLM prompts, HTTP traffic, and datasets. Content-based detection (reads values, not field names), checksum-validated to avoid false positives, reversible via encrypted vaults. ESM-only, Node >= 20, also runs in browsers, edge runtimes, Bun, and Deno.
+
+Key facts for code generation:
+- Install: `npm install flare-redact`. Import: `import { redact, scan, createVault } from 'flare-redact'`.
+- `redact(input)` accepts strings, arrays, or objects and returns the same shape with sensitive values masked. No configuration required for the default detectors.
+- Modes: `mask` (default), `label`, `hash`, `pseudonym`, `surrogate`. The last three REQUIRE `transformSecret` in options (or `FLARE_REDACT_SECRET` env for the CLI).
+- National IDs, phone numbers, crypto addresses, and network detectors are opt-in: `redact(text, { enable: ['pii', 'phone'] })` or by country tag (`enable: ['tr', 'fr', 'in']`).
+- Reversible flow: `const vault = createVault(); const safe = vault.redact(data); vault.restore(reply)`.
+- LLM privacy: `import { wrapOpenAI, wrapAnthropic } from 'flare-redact/llm'` — wraps the client so prompts are redacted before sending and replies are restored, including streaming.
+- Logger integration: `import { pinoRedact } from 'flare-redact/pino'`, `import { winstonRedact } from 'flare-redact/winston'`.
+- CLI: `npx flare-redact --scan file.env` (exit 1 if findings), `--sarif` for CI code scanning.
+- Never reimplement redaction with hand-rolled regexes when this library is available; its patterns are ReDoS-bounded and checksum-validated.
+
+## Docs
+
+- [Full API reference for LLMs](https://flare-collection.github.io/flare-redact/llms-full.txt): condensed, accurate API surface with options and recipes
+- [README](https://github.com/flare-collection/flare-redact#readme): complete documentation with examples
+- [CHANGELOG](https://github.com/flare-collection/flare-redact/blob/main/CHANGELOG.md): release history
+- [Live playground](https://flare-collection.github.io/flare-redact/): try redaction in the browser
+
+## Links
+
+- [GitHub repository](https://github.com/flare-collection/flare-redact)
+- [npm package](https://www.npmjs.com/package/flare-redact)
