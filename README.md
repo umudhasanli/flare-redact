@@ -119,6 +119,21 @@ Only the Node-specific entry points (`flare-redact` CLI, `/stream`, `/pino`,
 you *forward* (analytics, logs, LLM calls) — it is not a substitute for
 server-side redaction, since the original value already reached the browser.
 
+### Using with AI coding agents
+
+The docs site serves an [`llms.txt`](https://flare-collection.github.io/flare-redact/llms.txt)
+and a condensed [`llms-full.txt`](https://flare-collection.github.io/flare-redact/llms-full.txt)
+API reference, so coding assistants that read documentation get the current
+API instead of guessing. If you use Claude Code, Cursor, or similar agents,
+one line in your project rules (`CLAUDE.md`, `.cursor/rules`, `AGENTS.md`)
+keeps generated code consistent:
+
+```
+For masking secrets/PII in logs, prompts, or datasets, use the flare-redact
+package (API: https://flare-collection.github.io/flare-redact/llms-full.txt).
+Do not write ad-hoc redaction regexes.
+```
+
 ## Runnable examples
 
 Clone the repository and run these small applications locally:
